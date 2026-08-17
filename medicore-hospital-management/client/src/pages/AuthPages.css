@@ -1,0 +1,16 @@
+.auth-layout { display: grid; min-height: 100vh; place-items: center; padding: 2rem; }
+.auth-card { width: min(100%, 440px); padding: 2.75rem; border: 1px solid #dbe7ee; border-radius: 20px; background: #fff; box-shadow: 0 20px 50px rgb(32 74 94 / 12%); }
+.auth-card h1 { margin: 0; color: #123047; font-size: clamp(2rem, 6vw, 2.75rem); }
+.auth-intro, .placeholder-copy { margin: .85rem 0 0; color: #526779; line-height: 1.55; }
+.auth-form { display: grid; gap: .55rem; margin-top: 2rem; }
+.auth-form label { color: #29475c; font-size: .9rem; font-weight: 700; }
+.auth-form input, .auth-form select { width: 100%; margin-bottom: .8rem; padding: .75rem .85rem; border: 1px solid #b9cbd6; border-radius: 8px; color: #123047; font: inherit; }
+.auth-form input:focus, .auth-form select:focus { border-color: #087f8c; outline: 3px solid rgb(8 127 140 / 15%); }
+button { margin-top: .5rem; padding: .8rem 1rem; border: 0; border-radius: 8px; background: #087f8c; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+button:hover:not(:disabled) { background: #066974; }
+button:disabled { cursor: wait; opacity: .7; }
+.form-error { margin: 0; padding: .65rem .75rem; border-radius: 8px; background: #fff1f1; color: #9a2727; font-size: .9rem; }
+.auth-link { margin: 1.5rem 0 0; color: #526779; }
+.auth-link a { color: #087f8c; font-weight: 700; }
+.workspace-card { width: min(100%, 680px); }
+.route-status { display: grid; min-height: 100vh; place-items: center; color: #526779; }

@@ -1,16 +1,18 @@
-import './App.css';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
+import LoginPage from './pages/LoginPage';
+import ProtectedPlaceholderPage from './pages/ProtectedPlaceholderPage';
+import RegisterPage from './pages/RegisterPage';
 
 function App() {
   return (
-    <main className="app-shell">
-      <section className="welcome-card" aria-labelledby="page-title">
-        <p className="eyebrow">Healthcare made connected</p>
-        <h1 id="page-title">MediCore Hospital Management System</h1>
-        <p className="description">
-          A unified workspace for high-quality patient care and hospital operations.
-        </p>
-      </section>
-    </main>
+    <Routes>
+      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/app" element={<ProtectedRoute><ProtectedPlaceholderPage /></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/app" replace />} />
+    </Routes>
   );
 }
 
