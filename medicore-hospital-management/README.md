@@ -4,7 +4,7 @@ MediCore is a production-oriented hospital management system being built as a ME
 
 ## Tech stack
 
-- MongoDB (connected in a later phase)
+- MongoDB Atlas with Mongoose
 - Express.js and Node.js
 - React with Vite
 
@@ -16,6 +16,7 @@ medicore-hospital-management/
 ├── server/                 # Express API
 │   └── src/
 │       ├── app.js          # Express configuration and routes
+│       ├── config/db.js    # MongoDB connection configuration
 │       └── server.js       # HTTP server entry point
 ├── docs/                   # Project documentation
 ├── .gitignore
@@ -34,7 +35,14 @@ npm install --prefix server
 npm run dev
 ```
 
-The Vite app runs at the URL printed by Vite (normally `http://localhost:5173`), and the API runs at `http://localhost:5000`.
+Before starting the API, create `server/.env` from `server/.env.example` and provide your MongoDB Atlas connection string. Never commit `server/.env` or place credentials in source code.
+
+```env
+MONGODB_URI=your_mongodb_atlas_connection_string
+PORT=5000
+```
+
+The Vite app runs at the URL printed by Vite (normally `http://localhost:5173`), and the API runs at `http://localhost:5000`. The API starts only after it connects to MongoDB successfully.
 
 ## Development commands
 
