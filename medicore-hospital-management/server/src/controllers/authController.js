@@ -16,6 +16,8 @@ const serializeUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  active: user.active !== false,
+  doctorId: user.doctor?._id || user.doctor || null,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
@@ -65,7 +67,7 @@ const login = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     const isPasswordValid = user && (await user.comparePassword(password));
 
-    if (!isPasswordValid) {
+    if (!isPasswordValid || user.active === false) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 

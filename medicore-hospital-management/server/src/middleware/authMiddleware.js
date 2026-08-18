@@ -17,11 +17,12 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
-    if (!user) {
+    if (!user || user.active === false) {
       return res.status(401).json({ success: false, message: 'Authentication is required' });
     }
 
     req.user = user;
+    req.user.doctorId = user.role === 'doctor' && user.doctor ? String(user.doctor) : null;
     return next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });

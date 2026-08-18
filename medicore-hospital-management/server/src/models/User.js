@@ -30,8 +30,24 @@ const userSchema = new mongoose.Schema(
       },
       default: 'receptionist',
     },
+    doctor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Doctor',
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
+);
+
+userSchema.index(
+  { doctor: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: 'doctor', active: true, doctor: { $exists: true } },
+  }
 );
 
 userSchema.pre('save', async function hashPassword() {
