@@ -24,6 +24,17 @@ const parseDateTime = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const isDoctorUser = (req) => req.user?.role === 'doctor';
+
+const getDoctorScope = (req, res) => {
+  if (!isDoctorUser(req)) return null;
+  if (!req.user.doctorId) {
+    res.status(403).json({ success: false, message: 'Doctor account is not linked to a Doctor profile' });
+    return undefined;
+  }
+  return req.user.doctorId;
+};
+
 const findSchedulingConflict = async ({ patientId, doctorId, dateTime, excludeId }) => {
   const exclusion = excludeId ? { _id: { $ne: excludeId } } : {};
   const doctorConflict = await Appointment.findOne({ ...exclusion, doctor: doctorId, dateTime, status: { $ne: 'cancelled' } });
@@ -88,7 +99,9 @@ const validateReferences = async (patientId, doctorId) => {
 
 const getAppointments = async (req, res) => {
   try {
-    const appointments = await Appointment.find().sort({ dateTime: 1 });
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    const appointments = await Appointment.find(doctorId ? { doctor: doctorId } : {}).sort({ dateTime: 1 });
     res.status(200).json({ success: true, data: appointments });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Unable to retrieve appointments' });
@@ -101,7 +114,9 @@ const getAppointmentById = async (req, res) => {
   }
 
   try {
-    const appointment = await Appointment.findById(req.params.id);
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    const appointment = await Appointment.findOne({ _id: req.params.id, ...(doctorId ? { doctor: doctorId } : {}) });
 
     if (!appointment) {
       return sendNotFoundResponse(res);
@@ -115,7 +130,13 @@ const getAppointmentById = async (req, res) => {
 
 const createAppointment = async (req, res) => {
   try {
-    const referenceError = await validateReferences(req.body.patient, req.body.doctor);
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    if (doctorId && req.body.doctor && String(req.body.doctor) !== String(doctorId)) {
+      return res.status(403).json({ success: false, message: 'Doctors can only create appointments for their own Doctor profile' });
+    }
+    const requestedDoctorId = doctorId || req.body.doctor;
+    const referenceError = await validateReferences(req.body.patient, requestedDoctorId);
 
     if (referenceError) {
       return res.status(400).json({ success: false, message: referenceError.message });
@@ -128,14 +149,15 @@ const createAppointment = async (req, res) => {
 
     const conflict = await findSchedulingConflict({
       patientId: req.body.patient,
-      doctorId: req.body.doctor,
+      doctorId: requestedDoctorId,
       dateTime,
     });
     if (conflict) {
       return res.status(409).json({ success: false, message: conflict.message });
     }
 
-    const appointment = await Appointment.create(req.body);
+    const payload = { ...req.body, doctor: requestedDoctorId, dateTime };
+    const appointment = await Appointment.create(payload);
     return res.status(201).json({ success: true, data: appointment });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') {
@@ -152,14 +174,19 @@ const updateAppointment = async (req, res) => {
   }
 
   try {
-    const existingAppointment = await Appointment.findById(req.params.id);
+    const doctorScope = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorScope === undefined) return;
+    const existingAppointment = await Appointment.findOne({ _id: req.params.id, ...(doctorScope ? { doctor: doctorScope } : {}) });
 
     if (!existingAppointment) {
       return sendNotFoundResponse(res);
     }
 
     const patientId = req.body.patient ?? existingAppointment.patient;
-    const doctorId = req.body.doctor ?? existingAppointment.doctor;
+    if (doctorScope && req.body.doctor && String(req.body.doctor) !== String(doctorScope)) {
+      return res.status(403).json({ success: false, message: 'Doctors can only update appointments for their own Doctor profile' });
+    }
+    const doctorId = doctorScope || req.body.doctor || existingAppointment.doctor;
     const dateTime = parseDateTime(req.body.dateTime ?? existingAppointment.dateTime);
     const nextStatus = req.body.status ?? existingAppointment.status;
     const referenceError = await validateReferences(patientId, doctorId);
@@ -187,7 +214,8 @@ const updateAppointment = async (req, res) => {
       return res.status(409).json({ success: false, message: conflict.message });
     }
 
-    const appointment = await Appointment.findByIdAndUpdate(req.params.id, req.body, {
+    const payload = { ...req.body, doctor: doctorId, dateTime };
+    const appointment = await Appointment.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
@@ -208,7 +236,9 @@ const deleteAppointment = async (req, res) => {
   }
 
   try {
-    const appointment = await Appointment.findByIdAndDelete(req.params.id);
+    const doctorScope = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorScope === undefined) return;
+    const appointment = await Appointment.findOneAndDelete({ _id: req.params.id, ...(doctorScope ? { doctor: doctorScope } : {}) });
 
     if (!appointment) {
       return sendNotFoundResponse(res);

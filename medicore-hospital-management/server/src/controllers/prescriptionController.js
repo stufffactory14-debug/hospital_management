@@ -28,6 +28,17 @@ const sendValidationError = (res, error) =>
 
 const sameReference = (left, right) => String(left) === String(right);
 
+const isDoctorUser = (req) => req.user?.role === 'doctor';
+
+const getDoctorScope = (req, res) => {
+  if (!isDoctorUser(req)) return null;
+  if (!req.user.doctorId) {
+    res.status(403).json({ success: false, message: 'Doctor account is not linked to a Doctor profile' });
+    return undefined;
+  }
+  return req.user.doctorId;
+};
+
 const validateReferences = async (patientId, doctorId, appointmentId) => {
   if (!patientId) return { status: 400, message: 'Patient is required' };
   if (!doctorId) return { status: 400, message: 'Doctor is required' };
@@ -58,7 +69,9 @@ const validateReferences = async (patientId, doctorId, appointmentId) => {
 
 const getPrescriptions = async (req, res) => {
   try {
-    const prescriptions = await populatePrescription(Prescription.find().sort({ createdAt: -1 }));
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    const prescriptions = await populatePrescription(Prescription.find(doctorId ? { doctor: doctorId } : {}).sort({ createdAt: -1 }));
     return res.status(200).json({ success: true, data: prescriptions });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Unable to retrieve prescriptions' });
@@ -69,7 +82,9 @@ const getPrescriptionById = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return sendInvalidIdResponse(res);
 
   try {
-    const prescription = await populatePrescription(Prescription.findById(req.params.id));
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    const prescription = await populatePrescription(Prescription.findOne({ _id: req.params.id, ...(doctorId ? { doctor: doctorId } : {}) }));
 
     if (!prescription) return sendNotFoundResponse(res);
     return res.status(200).json({ success: true, data: prescription });
@@ -81,6 +96,12 @@ const getPrescriptionById = async (req, res) => {
 const createPrescription = async (req, res) => {
   try {
     const payload = pickPrescriptionFields(req.body);
+    const doctorId = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorId === undefined) return;
+    if (doctorId && payload.doctor && !sameReference(payload.doctor, doctorId)) {
+      return res.status(403).json({ success: false, message: 'Doctors can only create prescriptions under their own Doctor profile' });
+    }
+    if (doctorId) payload.doctor = doctorId;
     const referenceError = await validateReferences(payload.patient, payload.doctor, payload.appointment);
 
     if (referenceError) {
@@ -99,7 +120,9 @@ const updatePrescription = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return sendInvalidIdResponse(res);
 
   try {
-    const existingPrescription = await Prescription.findById(req.params.id);
+    const doctorScope = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorScope === undefined) return;
+    const existingPrescription = await Prescription.findOne({ _id: req.params.id, ...(doctorScope ? { doctor: doctorScope } : {}) });
     if (!existingPrescription) return sendNotFoundResponse(res);
 
     const payload = pickPrescriptionFields(req.body);
@@ -107,8 +130,12 @@ const updatePrescription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No prescription fields provided for update' });
     }
 
+    if (doctorScope && payload.doctor && !sameReference(payload.doctor, doctorScope)) {
+      return res.status(403).json({ success: false, message: 'Doctors can only update prescriptions under their own Doctor profile' });
+    }
     const patientId = payload.patient ?? existingPrescription.patient;
-    const doctorId = payload.doctor ?? existingPrescription.doctor;
+    const doctorId = doctorScope || payload.doctor || existingPrescription.doctor;
+    if (doctorScope) payload.doctor = doctorScope;
     const appointmentId = Object.hasOwn(payload, 'appointment') ? payload.appointment : existingPrescription.appointment;
     const referenceError = await validateReferences(patientId, doctorId, appointmentId);
 
@@ -133,7 +160,9 @@ const deletePrescription = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return sendInvalidIdResponse(res);
 
   try {
-    const prescription = await Prescription.findByIdAndDelete(req.params.id);
+    const doctorScope = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorScope === undefined) return;
+    const prescription = await Prescription.findOneAndDelete({ _id: req.params.id, ...(doctorScope ? { doctor: doctorScope } : {}) });
     if (!prescription) return sendNotFoundResponse(res);
     return res.status(200).json({ success: true, message: 'Prescription deleted successfully' });
   } catch (error) {

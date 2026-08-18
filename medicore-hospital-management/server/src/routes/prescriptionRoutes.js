@@ -21,6 +21,6 @@ router
   .route('/:id')
   .get(authorizeRoles('admin', 'doctor', 'receptionist'), getPrescriptionById)
   .put(authorizeRoles('admin', 'doctor'), updatePrescription)
-  .delete(authorizeRoles('admin'), deletePrescription);
+  .delete(authorizeRoles('admin', 'doctor'), deletePrescription);
 
 module.exports = router;
