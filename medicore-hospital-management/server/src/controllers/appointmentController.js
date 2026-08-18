@@ -3,6 +3,13 @@ const Appointment = require('../models/Appointment');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 
+const VALID_STATUSES = ['scheduled', 'completed', 'cancelled'];
+const ALLOWED_STATUS_TRANSITIONS = {
+  scheduled: ['scheduled', 'completed', 'cancelled'],
+  completed: ['completed'],
+  cancelled: ['cancelled'],
+};
+
 const sendInvalidIdResponse = (res) =>
   res.status(400).json({ success: false, message: 'Invalid appointment ID' });
 
@@ -11,6 +18,40 @@ const sendNotFoundResponse = (res) =>
 
 const sendValidationError = (res, error) =>
   res.status(400).json({ success: false, message: error.message });
+
+const parseDateTime = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const findSchedulingConflict = async ({ patientId, doctorId, dateTime, excludeId }) => {
+  const exclusion = excludeId ? { _id: { $ne: excludeId } } : {};
+  const doctorConflict = await Appointment.findOne({ ...exclusion, doctor: doctorId, dateTime, status: { $ne: 'cancelled' } });
+
+  if (doctorConflict) {
+    return { message: 'Doctor already has an appointment at this time' };
+  }
+
+  const patientConflict = await Appointment.findOne({ ...exclusion, patient: patientId, dateTime, status: { $ne: 'cancelled' } });
+
+  if (patientConflict) {
+    return { message: 'Patient already has an appointment at this time' };
+  }
+
+  return null;
+};
+
+const validateStatusTransition = (currentStatus, nextStatus) => {
+  if (!VALID_STATUSES.includes(nextStatus)) {
+    return 'Appointment status must be scheduled, completed, or cancelled';
+  }
+
+  if (!ALLOWED_STATUS_TRANSITIONS[currentStatus]?.includes(nextStatus)) {
+    return `Appointment status cannot change from ${currentStatus} to ${nextStatus}`;
+  }
+
+  return null;
+};
 
 const validateReferences = async (patientId, doctorId) => {
   if (!patientId) {
@@ -80,6 +121,20 @@ const createAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: referenceError.message });
     }
 
+    const dateTime = parseDateTime(req.body.dateTime);
+    if (!dateTime) {
+      return res.status(400).json({ success: false, message: 'Appointment date and time must be valid' });
+    }
+
+    const conflict = await findSchedulingConflict({
+      patientId: req.body.patient,
+      doctorId: req.body.doctor,
+      dateTime,
+    });
+    if (conflict) {
+      return res.status(409).json({ success: false, message: conflict.message });
+    }
+
     const appointment = await Appointment.create(req.body);
     return res.status(201).json({ success: true, data: appointment });
   } catch (error) {
@@ -105,10 +160,31 @@ const updateAppointment = async (req, res) => {
 
     const patientId = req.body.patient ?? existingAppointment.patient;
     const doctorId = req.body.doctor ?? existingAppointment.doctor;
+    const dateTime = parseDateTime(req.body.dateTime ?? existingAppointment.dateTime);
+    const nextStatus = req.body.status ?? existingAppointment.status;
     const referenceError = await validateReferences(patientId, doctorId);
 
     if (referenceError) {
       return res.status(400).json({ success: false, message: referenceError.message });
+    }
+
+    if (!dateTime) {
+      return res.status(400).json({ success: false, message: 'Appointment date and time must be valid' });
+    }
+
+    const statusError = validateStatusTransition(existingAppointment.status, nextStatus);
+    if (statusError) {
+      return res.status(400).json({ success: false, message: statusError });
+    }
+
+    const conflict = await findSchedulingConflict({
+      patientId,
+      doctorId,
+      dateTime,
+      excludeId: req.params.id,
+    });
+    if (conflict) {
+      return res.status(409).json({ success: false, message: conflict.message });
     }
 
     const appointment = await Appointment.findByIdAndUpdate(req.params.id, req.body, {
