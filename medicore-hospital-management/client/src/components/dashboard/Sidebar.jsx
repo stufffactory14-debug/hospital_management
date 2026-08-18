@@ -1,6 +1,6 @@
 const navigationItems = [
-  { label: 'Dashboard', icon: '▦' },
-  { label: 'Patients', icon: '♙' },
+  { label: 'Dashboard', icon: '▦', path: '/app' },
+  { label: 'Patients', icon: '♙', path: '/app/patients' },
   { label: 'Doctors', icon: '✚' },
   { label: 'Appointments', icon: '◷' },
   { label: 'Prescriptions', icon: '▤' },
@@ -24,7 +24,7 @@ function Sidebar({ activeItem, isOpen, onClose, onSelect }) {
               className={`nav-item ${activeItem === item.label ? 'nav-item-active' : ''}`}
               type="button"
               key={item.label}
-              onClick={() => onSelect(item.label)}
+              onClick={() => onSelect(item)}
             >
               <span aria-hidden="true">{item.icon}</span>
               {item.label}

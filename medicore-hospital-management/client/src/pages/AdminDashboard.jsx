@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import QuickActions from '../components/dashboard/QuickActions';
 import RecentAppointments from '../components/dashboard/RecentAppointments';
-import Sidebar from '../components/dashboard/Sidebar';
+import DashboardLayout from '../components/dashboard/DashboardLayout';
 import StatCard from '../components/dashboard/StatCard';
-import Topbar from '../components/dashboard/Topbar';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import './AdminDashboard.css';
@@ -27,14 +25,11 @@ const getReferenceId = (reference) => {
 };
 
 function AdminDashboard() {
-  const [activeItem, setActiveItem] = useState('Dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [data, setData] = useState({ patients: [], doctors: [], appointments: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const hasFetched = useRef(false);
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -101,22 +96,9 @@ function AdminDashboard() {
     });
   }, [data]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
-  const handleNavigation = (item) => {
-    setActiveItem(item);
-    setIsSidebarOpen(false);
-  };
-
   return (
-    <div className="dashboard-shell">
-      <Sidebar activeItem={activeItem} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onSelect={handleNavigation} />
-      <main className="dashboard-main">
-        <Topbar title={activeItem} user={user} onLogout={handleLogout} onMenuToggle={() => setIsSidebarOpen(true)} />
-        <div className="dashboard-content">
+    <DashboardLayout activeItem="Dashboard" title="Dashboard">
+      <div className="dashboard-content">
           <section className="welcome-banner">
             <div>
               <p className="section-label">MediCore command center</p>
@@ -141,9 +123,8 @@ function AdminDashboard() {
             <RecentAppointments appointments={recentAppointments} loading={loading} error={Boolean(error)} />
             <QuickActions />
           </section>
-        </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
 
