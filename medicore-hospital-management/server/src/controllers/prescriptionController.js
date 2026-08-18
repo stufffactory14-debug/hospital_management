@@ -26,6 +26,8 @@ const sendNotFoundResponse = (res) =>
 const sendValidationError = (res, error) =>
   res.status(400).json({ success: false, message: error.message });
 
+const sameReference = (left, right) => String(left) === String(right);
+
 const validateReferences = async (patientId, doctorId, appointmentId) => {
   if (!patientId) return { status: 400, message: 'Patient is required' };
   if (!doctorId) return { status: 400, message: 'Doctor is required' };
@@ -42,6 +44,14 @@ const validateReferences = async (patientId, doctorId, appointmentId) => {
   if (!patient) return { status: 404, message: 'Patient not found' };
   if (!doctor) return { status: 404, message: 'Doctor not found' };
   if (appointmentId && !appointment) return { status: 404, message: 'Appointment not found' };
+
+  if (appointmentId && !sameReference(appointment.patient, patientId)) {
+    return { status: 400, message: 'Appointment patient does not match prescription patient' };
+  }
+
+  if (appointmentId && !sameReference(appointment.doctor, doctorId)) {
+    return { status: 400, message: 'Appointment doctor does not match prescription doctor' };
+  }
 
   return null;
 };

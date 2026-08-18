@@ -15,6 +15,8 @@ const createInputError = (message) => {
   return error;
 };
 
+const sameReference = (left, right) => String(left) === String(right);
+
 const pickInvoiceFields = (body) => Object.fromEntries(
   allowedFields.filter((field) => Object.hasOwn(body, field)).map((field) => [field, body[field]])
 );
@@ -104,6 +106,15 @@ const validateReferences = async (patientId, doctorId, appointmentId) => {
   if (!patient) return { status: 404, message: 'Patient not found' };
   if (doctorId && !doctor) return { status: 404, message: 'Doctor not found' };
   if (appointmentId && !appointment) return { status: 404, message: 'Appointment not found' };
+
+  if (appointmentId && !sameReference(appointment.patient, patientId)) {
+    return { status: 400, message: 'Appointment patient does not match invoice patient' };
+  }
+
+  if (appointmentId && doctorId && !sameReference(appointment.doctor, doctorId)) {
+    return { status: 400, message: 'Appointment doctor does not match invoice doctor' };
+  }
+
   return null;
 };
 
