@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const PUBLIC_REGISTRATION_ROLES = ['doctor', 'receptionist'];
+
 const createToken = (userId) => {
   if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET is not configured.');
@@ -21,6 +23,11 @@ const serializeUser = (user) => ({
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+
+    if (!PUBLIC_REGISTRATION_ROLES.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Public registration role must be doctor or receptionist' });
+    }
+
     const existingUser = await User.findOne({ email: email?.toLowerCase() });
 
     if (existingUser) {
