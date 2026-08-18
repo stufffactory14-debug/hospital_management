@@ -10,6 +10,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import RegisterPage from './pages/RegisterPage';
 import BillingPage from './pages/BillingPage';
 import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
       <Route path="/app/prescriptions" element={<ProtectedRoute><PrescriptionsPage /></ProtectedRoute>} />
       <Route path="/app/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
       <Route path="/app/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+      <Route path="/app/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );
