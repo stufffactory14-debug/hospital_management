@@ -1,7 +1,7 @@
 const navigationGroups = [
   { label: 'Overview', items: [{ label: 'Dashboard', icon: '▦', path: '/app' }] },
   { label: 'Clinical', items: [{ label: 'Patients', icon: '♙', path: '/app/patients' }, { label: 'Doctors', icon: '✚', path: '/app/doctors' }, { label: 'Appointments', icon: '◷', path: '/app/appointments' }, { label: 'Prescriptions', icon: '▤', path: '/app/prescriptions' }] },
-  { label: 'Operations', items: [{ label: 'Billing', icon: '◈', comingSoon: true }, { label: 'Reports', icon: '▥', comingSoon: true }] },
+  { label: 'Operations', items: [{ label: 'Billing', icon: '◈', path: '/app/billing' }, { label: 'Reports', icon: '▥', comingSoon: true }] },
   { label: 'System', items: [{ label: 'Settings', icon: '⚙', comingSoon: true, adminOnly: true }] },
 ];
 
