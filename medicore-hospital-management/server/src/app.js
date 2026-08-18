@@ -2,6 +2,7 @@ const express = require('express');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const authRoutes = require('./routes/authRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
 
@@ -17,5 +18,6 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 module.exports = app;
