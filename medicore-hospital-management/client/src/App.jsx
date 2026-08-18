@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LoginPage from './pages/LoginPage';
+import DoctorsPage from './pages/DoctorsPage';
 import PatientsPage from './pages/PatientsPage';
 import AdminDashboard from './pages/AdminDashboard';
 import RegisterPage from './pages/RegisterPage';
@@ -13,6 +14,7 @@ function App() {
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/app" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/app/patients" element={<ProtectedRoute><PatientsPage /></ProtectedRoute>} />
+      <Route path="/app/doctors" element={<ProtectedRoute><DoctorsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );

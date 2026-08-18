@@ -1,7 +1,7 @@
 const navigationItems = [
   { label: 'Dashboard', icon: '▦', path: '/app' },
   { label: 'Patients', icon: '♙', path: '/app/patients' },
-  { label: 'Doctors', icon: '✚' },
+  { label: 'Doctors', icon: '✚', path: '/app/doctors' },
   { label: 'Appointments', icon: '◷' },
   { label: 'Prescriptions', icon: '▤' },
   { label: 'Billing', icon: '◈' },
