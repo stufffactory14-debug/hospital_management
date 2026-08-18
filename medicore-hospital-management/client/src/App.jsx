@@ -9,6 +9,7 @@ import PrescriptionsPage from './pages/PrescriptionsPage';
 import AdminDashboard from './pages/AdminDashboard';
 import RegisterPage from './pages/RegisterPage';
 import BillingPage from './pages/BillingPage';
+import ReportsPage from './pages/ReportsPage';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
       <Route path="/app/appointments" element={<ProtectedRoute><AppointmentsPage /></ProtectedRoute>} />
       <Route path="/app/prescriptions" element={<ProtectedRoute><PrescriptionsPage /></ProtectedRoute>} />
       <Route path="/app/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+      <Route path="/app/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );
