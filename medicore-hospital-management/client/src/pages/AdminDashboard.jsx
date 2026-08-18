@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QuickActions from '../components/dashboard/QuickActions';
 import RecentAppointments from '../components/dashboard/RecentAppointments';
+import AppointmentStatusDistribution from '../components/dashboard/AppointmentStatusDistribution';
+import UpcomingAppointments from '../components/dashboard/UpcomingAppointments';
+import RecentActivity from '../components/dashboard/RecentActivity';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import StatCard from '../components/dashboard/StatCard';
 import { useAuth } from '../context/AuthContext';
@@ -90,11 +93,19 @@ function AdminDashboard() {
 
       return {
         ...appointment,
-        patientName: patient?.name || `Patient ID: ${patientReference || 'unavailable'}`,
-        doctorName: doctor?.name || `Doctor ID: ${doctorReference || 'unavailable'}`,
+        patientName: patient?.name || 'Unknown patient',
+        doctorName: doctor?.name || 'Unknown doctor',
       };
     });
   }, [data]);
+
+  const upcomingAppointments = useMemo(() => recentAppointments
+    .filter((appointment) => new Date(appointment.dateTime).getTime() >= Date.now() && appointment.status === 'scheduled')
+    .sort((first, second) => new Date(first.dateTime) - new Date(second.dateTime))
+    .slice(0, 4), [recentAppointments]);
+
+  const activityAppointments = useMemo(() => [...recentAppointments]
+    .sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt)), [recentAppointments]);
 
   return (
     <DashboardLayout activeItem="Dashboard" title="Dashboard">
@@ -121,8 +132,15 @@ function AdminDashboard() {
 
           <section className="dashboard-lower-grid">
             <RecentAppointments appointments={recentAppointments} loading={loading} error={Boolean(error)} />
+            <AppointmentStatusDistribution appointments={data.appointments} loading={loading} />
+          </section>
+
+          <section className="dashboard-lower-grid dashboard-lower-grid-secondary">
+            <UpcomingAppointments appointments={upcomingAppointments} loading={loading} />
             <QuickActions />
           </section>
+
+          <RecentActivity appointments={activityAppointments} loading={loading} />
       </div>
     </DashboardLayout>
   );

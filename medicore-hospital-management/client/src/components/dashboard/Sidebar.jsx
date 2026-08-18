@@ -1,35 +1,22 @@
-const navigationItems = [
-  { label: 'Dashboard', icon: '▦', path: '/app' },
-  { label: 'Patients', icon: '♙', path: '/app/patients' },
-  { label: 'Doctors', icon: '✚', path: '/app/doctors' },
-  { label: 'Appointments', icon: '◷' },
-  { label: 'Prescriptions', icon: '▤' },
-  { label: 'Billing', icon: '◈' },
-  { label: 'Settings', icon: '⚙' },
+const navigationGroups = [
+  { label: 'Overview', items: [{ label: 'Dashboard', icon: '▦', path: '/app' }] },
+  { label: 'Clinical', items: [{ label: 'Patients', icon: '♙', path: '/app/patients' }, { label: 'Doctors', icon: '✚', path: '/app/doctors' }, { label: 'Appointments', icon: '◷', path: '/app/appointments' }, { label: 'Prescriptions', icon: '▤', comingSoon: true }] },
+  { label: 'Operations', items: [{ label: 'Billing', icon: '◈', comingSoon: true }, { label: 'Reports', icon: '▥', comingSoon: true }] },
+  { label: 'System', items: [{ label: 'Settings', icon: '⚙', comingSoon: true, adminOnly: true }] },
 ];
 
-function Sidebar({ activeItem, isOpen, onClose, onSelect }) {
+function Sidebar({ activeItem, isOpen, onClose, onSelect, userRole }) {
   return (
     <>
       {isOpen && <button className="sidebar-backdrop" type="button" aria-label="Close navigation" onClick={onClose} />}
       <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">✚</span>
-          <span>MediCore</span>
+        <div className="brand" aria-label="MediCore hospital management">
+          <span className="brand-mark" aria-hidden="true">+</span>
+          <span><b>MediCore</b><small>Hospital operations</small></span>
         </div>
 
         <nav className="sidebar-nav">
-          {navigationItems.map((item) => (
-            <button
-              className={`nav-item ${activeItem === item.label ? 'nav-item-active' : ''}`}
-              type="button"
-              key={item.label}
-              onClick={() => onSelect(item)}
-            >
-              <span aria-hidden="true">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {navigationGroups.map((group) => <section className="nav-group" key={group.label}><p>{group.label}</p>{group.items.filter((item) => !item.adminOnly || userRole === 'admin').map((item) => <button className={`nav-item ${activeItem === item.label ? 'nav-item-active' : ''} ${item.comingSoon ? 'nav-item-disabled' : ''}`} type="button" key={item.label} onClick={() => !item.comingSoon && onSelect(item)} disabled={item.comingSoon} aria-label={item.comingSoon ? `${item.label}, coming soon` : item.label}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span>{item.comingSoon && <em>Soon</em>}</button>)}</section>)}
         </nav>
 
         <div className="sidebar-footer">

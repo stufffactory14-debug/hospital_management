@@ -24,7 +24,7 @@ function DashboardLayout({ activeItem, title, children }) {
 
   return (
     <div className="dashboard-shell">
-      <Sidebar activeItem={activeItem} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onSelect={handleNavigation} />
+      <Sidebar activeItem={activeItem} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onSelect={handleNavigation} userRole={user?.role} />
       <main className="dashboard-main">
         <Topbar title={title} user={user} onLogout={handleLogout} onMenuToggle={() => setIsSidebarOpen(true)} />
         {children}
