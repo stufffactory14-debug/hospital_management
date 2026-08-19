@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Appointment = require('../models/Appointment');
 const Doctor = require('../models/Doctor');
 const Invoice = require('../models/Invoice');
+const Payment = require('../models/Payment');
 const Patient = require('../models/Patient');
 
 const allowedFields = ['patient', 'doctor', 'appointment', 'items', 'discount', 'tax', 'paidAmount', 'paymentMethod', 'dueDate', 'notes'];
@@ -89,7 +90,9 @@ const createInvoiceNumber = () => `INV-${Date.now()}-${crypto.randomBytes(3).toS
 const populateInvoice = (query) => query
   .populate('patient', 'name email phone')
   .populate('doctor', 'name specialization')
-  .populate('appointment', 'dateTime reason status');
+  .populate('appointment', 'dateTime reason status')
+  .populate('createdBy', 'name email role')
+  .populate('updatedBy', 'name email role');
 
 const validateReferences = async (patientId, doctorId, appointmentId) => {
   if (!patientId) return { status: 400, message: 'Patient is required' };
@@ -149,6 +152,8 @@ const createInvoice = async (req, res) => {
       ...payload,
       ...financials,
       invoiceNumber: createInvoiceNumber(),
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
     });
     return res.status(201).json({ success: true, data: invoice });
   } catch (error) {
@@ -170,6 +175,10 @@ const updateInvoice = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No invoice fields provided for update' });
     }
 
+    if (Object.hasOwn(payload, 'paidAmount') && Number(payload.paidAmount) !== Number(existingInvoice.paidAmount || 0) && await Payment.exists({ invoice: existingInvoice._id })) {
+      return res.status(409).json({ success: false, message: 'Paid amount is controlled by payment transactions for this invoice' });
+    }
+
     const patientId = payload.patient ?? existingInvoice.patient;
     const doctorId = Object.hasOwn(payload, 'doctor') ? payload.doctor || null : existingInvoice.doctor;
     const appointmentId = Object.hasOwn(payload, 'appointment') ? payload.appointment || null : existingInvoice.appointment;
@@ -186,6 +195,7 @@ const updateInvoice = async (req, res) => {
       ...payload,
       doctor: doctorId,
       appointment: appointmentId,
+      updatedBy: req.user._id,
       ...financials,
     }, { new: true, runValidators: true }));
 
@@ -202,6 +212,9 @@ const updateInvoice = async (req, res) => {
 const deleteInvoice = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
   try {
+    if (await Payment.exists({ invoice: req.params.id })) {
+      return res.status(409).json({ success: false, message: 'An invoice with payment history cannot be deleted' });
+    }
     const invoice = await Invoice.findByIdAndDelete(req.params.id);
     if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
     return res.status(200).json({ success: true, message: 'Invoice deleted successfully' });

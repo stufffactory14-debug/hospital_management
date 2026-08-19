@@ -4,6 +4,7 @@ const Doctor = require('../models/Doctor');
 const Invoice = require('../models/Invoice');
 const Patient = require('../models/Patient');
 const Prescription = require('../models/Prescription');
+const Payment = require('../models/Payment');
 
 const APPOINTMENT_STATUSES = ['scheduled', 'completed', 'cancelled'];
 const PAYMENT_STATUSES = ['unpaid', 'partial', 'paid'];
@@ -128,13 +129,14 @@ const getBillingReport = async (req, res) => {
     if (status && !PAYMENT_STATUSES.includes(status)) throw inputError('Invalid payment status');
     const match = { ...dateMatch('createdAt', range) };
     if (status) match.paymentStatus = status;
-    const [summary, byStatus, byDate] = await Promise.all([
+    const [summary, byStatus, byDate, paymentsReceived] = await Promise.all([
       Invoice.aggregate([{ $match: match }, { $group: { _id: null, invoiceCount: { $sum: 1 }, totalInvoiced: { $sum: '$total' }, totalPaid: { $sum: '$paidAmount' }, totalOutstanding: { $sum: { $max: [{ $subtract: ['$total', '$paidAmount'] }, 0] } } } }]),
       Invoice.aggregate([{ $match: match }, { $group: { _id: '$paymentStatus', count: { $sum: 1 }, total: { $sum: '$total' }, paidAmount: { $sum: '$paidAmount' } } }, { $sort: { _id: 1 } }]),
       Invoice.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } }, invoiceCount: { $sum: 1 }, totalInvoiced: { $sum: '$total' }, totalPaid: { $sum: '$paidAmount' } } }, { $project: { _id: 0, date: '$_id', invoiceCount: 1, totalInvoiced: 1, totalPaid: 1 } }, { $sort: { date: 1 } }]),
+      Payment.aggregate([{ $match: dateMatch('paidAt', range) }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
     ]);
     const totals = summary[0] || { invoiceCount: 0, totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0 };
-    return res.status(200).json({ success: true, data: rangeResponse(range, { invoiceCount: totals.invoiceCount, totalInvoiced: Number(totals.totalInvoiced || 0), totalPaid: Number(totals.totalPaid || 0), totalOutstanding: Number(totals.totalOutstanding || 0), byStatus, byDate }) });
+    return res.status(200).json({ success: true, data: rangeResponse(range, { invoiceCount: totals.invoiceCount, totalInvoiced: Number(totals.totalInvoiced || 0), totalPaid: Number(totals.totalPaid || 0), paymentsReceived: Number(paymentsReceived[0]?.total || 0), paymentTransactionCount: paymentsReceived[0]?.count || 0, totalOutstanding: Number(totals.totalOutstanding || 0), byStatus, byDate }) });
   } catch (error) {
     if (error.name === 'InputError') return res.status(400).json({ success: false, message: error.message });
     return res.status(500).json({ success: false, message: 'Unable to retrieve billing report' });
