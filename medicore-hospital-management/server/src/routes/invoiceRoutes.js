@@ -5,7 +5,7 @@ const { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice
 const router = express.Router();
 
 router.use(protect);
-router.route('/').get(authorizeRoles('admin', 'doctor', 'receptionist'), getInvoices).post(authorizeRoles('admin', 'receptionist'), createInvoice);
-router.route('/:id').get(authorizeRoles('admin', 'doctor', 'receptionist'), getInvoiceById).put(authorizeRoles('admin', 'receptionist'), updateInvoice).delete(authorizeRoles('admin'), deleteInvoice);
+router.route('/').get(authorizeRoles('admin', 'receptionist'), getInvoices).post(authorizeRoles('admin', 'receptionist'), createInvoice);
+router.route('/:id').get(authorizeRoles('admin', 'receptionist'), getInvoiceById).put(authorizeRoles('admin', 'receptionist'), updateInvoice).delete(authorizeRoles('admin'), deleteInvoice);
 
 module.exports = router;

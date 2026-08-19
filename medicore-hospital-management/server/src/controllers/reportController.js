@@ -49,6 +49,15 @@ const rangeResponse = (range, data) => ({
 
 const dateMatch = (field, range) => ({ [field]: { $gte: range.from, $lt: range.toExclusive } });
 
+const getDoctorScope = (req, res) => {
+  if (req.user?.role !== 'doctor') return null;
+  if (!req.user.doctorId) {
+    res.status(403).json({ success: false, message: 'Doctor account is not linked to a Doctor profile' });
+    return undefined;
+  }
+  return req.user.doctorId;
+};
+
 const getOverview = async (req, res) => {
   try {
     const range = getDateRange(req);
@@ -64,7 +73,7 @@ const getOverview = async (req, res) => {
     ]);
     const appointmentCounts = Object.fromEntries(APPOINTMENT_STATUSES.map((status) => [status, appointments.find((item) => item._id === status)?.count || 0]));
     const invoiceTotals = invoices[0] || { count: 0, totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0 };
-    return res.status(200).json({ success: true, data: rangeResponse(range, {
+    const data = {
       totalPatients: patients,
       totalDoctors: doctors,
       totalAppointments: appointments.reduce((sum, item) => sum + item.count, 0),
@@ -76,7 +85,9 @@ const getOverview = async (req, res) => {
       totalInvoiced: Number(invoiceTotals.totalInvoiced || 0),
       totalPaid: Number(invoiceTotals.totalPaid || 0),
       totalOutstanding: Number(invoiceTotals.totalOutstanding || 0),
-    }) });
+    };
+    if (req.user.role === 'receptionist') delete data.totalPrescriptions;
+    return res.status(200).json({ success: true, data: rangeResponse(range, data) });
   } catch (error) {
     if (error.name === 'InputError') return res.status(400).json({ success: false, message: error.message });
     return res.status(500).json({ success: false, message: 'Unable to retrieve report overview' });
@@ -90,8 +101,14 @@ const getAppointmentsReport = async (req, res) => {
     if (status && !APPOINTMENT_STATUSES.includes(status)) throw inputError('Invalid appointment status');
     if (doctor && !mongoose.isValidObjectId(doctor)) throw inputError('Invalid doctor ID');
     const match = { ...dateMatch('dateTime', range) };
+    const doctorScope = getDoctorScope(req, res);
+    if (req.user.role === 'doctor' && doctorScope === undefined) return;
+    if (doctorScope && doctor && String(doctor) !== String(doctorScope)) {
+      return res.status(403).json({ success: false, message: 'Doctors can only view their own appointment report' });
+    }
+    if (doctorScope) match.doctor = new mongoose.Types.ObjectId(doctorScope);
     if (status) match.status = status;
-    if (doctor) match.doctor = new mongoose.Types.ObjectId(doctor);
+    if (doctor && !doctorScope) match.doctor = new mongoose.Types.ObjectId(doctor);
     const [byStatus, byDate, byDoctor] = await Promise.all([
       Appointment.aggregate([{ $match: match }, { $group: { _id: '$status', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
       Appointment.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$dateTime', timezone: 'UTC' } }, count: { $sum: 1 } } }, { $project: { _id: 0, date: '$_id', count: 1 } }, { $sort: { date: 1 } }]),
@@ -128,6 +145,9 @@ const getClinicalReport = async (req, res) => {
   try {
     const range = getDateRange(req);
     const match = dateMatch('createdAt', range);
+    const doctorScope = getDoctorScope(req, res);
+    if (req.user.role === 'doctor' && doctorScope === undefined) return;
+    if (doctorScope) match.doctor = new mongoose.Types.ObjectId(doctorScope);
     const [summary, byDate, byDoctor, medicineCount, topMedicines] = await Promise.all([
       Prescription.aggregate([{ $match: match }, { $group: { _id: null, prescriptionCount: { $sum: 1 } } }]),
       Prescription.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } }, count: { $sum: 1 } } }, { $project: { _id: 0, date: '$_id', count: 1 } }, { $sort: { date: 1 } }]),

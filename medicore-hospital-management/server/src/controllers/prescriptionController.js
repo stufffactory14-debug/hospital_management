@@ -26,6 +26,16 @@ const sendNotFoundResponse = (res) =>
 const sendValidationError = (res, error) =>
   res.status(400).json({ success: false, message: error.message });
 
+const serializePrescription = (prescription, role) => {
+  const data = prescription.toObject ? prescription.toObject() : { ...prescription };
+  if (role === 'receptionist') {
+    delete data.diagnosis;
+    delete data.notes;
+    delete data.medicines;
+  }
+  return data;
+};
+
 const sameReference = (left, right) => String(left) === String(right);
 
 const isDoctorUser = (req) => req.user?.role === 'doctor';
@@ -72,7 +82,7 @@ const getPrescriptions = async (req, res) => {
     const doctorId = getDoctorScope(req, res);
     if (isDoctorUser(req) && doctorId === undefined) return;
     const prescriptions = await populatePrescription(Prescription.find(doctorId ? { doctor: doctorId } : {}).sort({ createdAt: -1 }));
-    return res.status(200).json({ success: true, data: prescriptions });
+    return res.status(200).json({ success: true, data: prescriptions.map((prescription) => serializePrescription(prescription, req.user.role)) });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Unable to retrieve prescriptions' });
   }
@@ -87,7 +97,7 @@ const getPrescriptionById = async (req, res) => {
     const prescription = await populatePrescription(Prescription.findOne({ _id: req.params.id, ...(doctorId ? { doctor: doctorId } : {}) }));
 
     if (!prescription) return sendNotFoundResponse(res);
-    return res.status(200).json({ success: true, data: prescription });
+    return res.status(200).json({ success: true, data: serializePrescription(prescription, req.user.role) });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Unable to retrieve prescription' });
   }
@@ -109,7 +119,7 @@ const createPrescription = async (req, res) => {
     }
 
     const prescription = await Prescription.create(payload);
-    return res.status(201).json({ success: true, data: prescription });
+    return res.status(201).json({ success: true, data: serializePrescription(prescription, req.user.role) });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') return sendValidationError(res, error);
     return res.status(500).json({ success: false, message: 'Unable to create prescription' });
@@ -149,7 +159,7 @@ const updatePrescription = async (req, res) => {
     }));
 
     if (!prescription) return sendNotFoundResponse(res);
-    return res.status(200).json({ success: true, data: prescription });
+    return res.status(200).json({ success: true, data: serializePrescription(prescription, req.user.role) });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') return sendValidationError(res, error);
     return res.status(500).json({ success: false, message: 'Unable to update prescription' });

@@ -12,7 +12,7 @@ const sendValidationError = (res, error) =>
 
 const getDoctors = async (req, res) => {
   try {
-    const doctors = await Doctor.find().sort({ createdAt: -1 });
+    const doctors = await Doctor.find().select('name email phone specialization department qualification experience createdAt updatedAt').sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: doctors });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Unable to retrieve doctors' });
@@ -25,7 +25,7 @@ const getDoctorById = async (req, res) => {
   }
 
   try {
-    const doctor = await Doctor.findById(req.params.id);
+    const doctor = await Doctor.findById(req.params.id).select('name email phone specialization department qualification experience createdAt updatedAt');
 
     if (!doctor) {
       return sendNotFoundResponse(res);
