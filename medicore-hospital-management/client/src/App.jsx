@@ -11,6 +11,7 @@ import RegisterPage from './pages/RegisterPage';
 import BillingPage from './pages/BillingPage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
+import QueuePage from './pages/QueuePage';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
       <Route path="/app/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
       <Route path="/app/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="/app/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
+      <Route path="/app/queue" element={<ProtectedRoute><QueuePage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );

@@ -29,6 +29,15 @@ const appointmentSchema = new mongoose.Schema(
       },
       default: 'scheduled',
     },
+    queueStatus: {
+      type: String,
+      enum: ['waiting', 'called', 'in_consultation', 'completed', 'cancelled'],
+    },
+    queueNumber: { type: Number, min: 1 },
+    queueDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ },
+    calledAt: Date,
+    consultationStartedAt: Date,
+    consultationCompletedAt: Date,
   },
   { timestamps: true }
 );
