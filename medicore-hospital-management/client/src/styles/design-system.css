@@ -162,3 +162,20 @@ body { background: var(--mc-bg); color: var(--mc-ink); }
 [data-theme="dark"] .appointment-modal-close,[data-theme="dark"] .modal-close,[data-theme="dark"] .doctor-modal-close,[data-theme="dark"] .prescription-modal-close { background: var(--mc-surface-subtle); color: var(--mc-ink-soft); }
 [data-theme="dark"] .status-no_show,[data-theme="dark"] .queue-status-no_show { background: #5c432b; color: #f1bd82; }
 [data-theme="dark"] .queue-entry-actions .queue-no-show { background: transparent; border-color: #8a6842; color: #f1bd82; }
+
+/* Final shared density and interaction polish. */
+.add-patient-button,.add-doctor-button,.create-appointment-button,.create-prescription-button,.billing-primary-action,.users-primary-action,.doctor-primary-action,.prescription-primary-action,.queue-call-next,.clinical-heading button,.workspace-primary { min-height: 38px; }
+.patient-actions button,.doctor-actions button,.appointment-actions button,.prescription-actions button,.invoice-actions button,.user-actions button { min-height: 32px; }
+.patients-table th,.doctors-table th,.appointments-management-table th,.prescriptions-table th,.invoice-table th,.users-table th { height: 42px; vertical-align: middle; }
+.patients-table td,.doctors-table td,.appointments-management-table td,.prescriptions-table td,.invoice-table td,.users-table td { line-height: 1.35; }
+.patients-toolbar,.doctors-toolbar,.appointments-toolbar,.prescriptions-toolbar,.billing-toolbar,.users-toolbar { min-height: 62px; }
+.patients-toolbar select,.doctors-toolbar select,.appointments-toolbar select,.prescriptions-toolbar select,.billing-toolbar select,.users-toolbar select { min-height: 38px; }
+.patient-form input,.patient-form select,.patient-form textarea,.doctor-form input,.doctor-form select,.appointment-form input,.appointment-form select,.appointment-form textarea,.prescription-form input,.prescription-form select,.prescription-form textarea,.invoice-form input,.invoice-form select,.invoice-form textarea,.user-form input,.user-form select { min-height: 40px; }
+.patient-form textarea,.appointment-form textarea,.prescription-form textarea,.invoice-form textarea { min-height: 88px; }
+.data-state,.patients-state,.doctors-state,.appointments-state,.prescriptions-state,.billing-state,.users-state,.report-empty,.queue-state { line-height: 1.5; }
+[data-theme="dark"] .appointment-status-pill.status-no_show,[data-theme="dark"] .appointment-status.status-no_show { background: #5c432b; color: #f1bd82; }
+[data-theme="dark"] .command-stat:hover,[data-theme="dark"] .action-button:hover:not(:disabled),[data-theme="dark"] .workspace-actions button:hover { background: var(--mc-surface-subtle); border-color: var(--mc-primary); }
+@media (max-width: 560px) {
+  .patients-toolbar,.doctors-toolbar,.appointments-toolbar,.prescriptions-toolbar,.billing-toolbar,.users-toolbar { min-height: 0; }
+  .command-hero,.clinical-heading,.workspace-heading,.queue-heading { gap: 1rem; }
+}
