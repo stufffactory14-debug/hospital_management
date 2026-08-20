@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import AppointmentModal from '../components/appointments/AppointmentModal';
 import AppointmentTable from '../components/appointments/AppointmentTable';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import './AppointmentsPage.css';
+import './AppointmentsPagination.css';
 
 const getCollection = (response) => (Array.isArray(response.data?.data) ? response.data.data : []);
 const getErrorMessage = (error, fallback) => error.response?.data?.message || fallback;
@@ -15,6 +16,9 @@ function AppointmentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -22,7 +26,6 @@ function AppointmentsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
-  const hasFetched = useRef(false);
   const { user } = useAuth();
   const canEdit = ['admin', 'doctor', 'receptionist'].includes(user?.role);
   const canDelete = user?.role === 'admin';
@@ -33,7 +36,7 @@ function AppointmentsPage() {
 
     try {
       const [appointmentsResponse, patientsResponse, doctorsResponse] = await Promise.all([
-        api.get('/appointments'),
+        api.get('/appointments', { params: { page, limit: pageSize, search: search.trim() || undefined, status: statusFilter || undefined, date: dateFilter || undefined } }),
         api.get('/patients'),
         api.get('/doctors'),
       ]);
@@ -42,16 +45,15 @@ function AppointmentsPage() {
         patients: getCollection(patientsResponse),
         doctors: getCollection(doctorsResponse),
       });
+      setPagination({ page: appointmentsResponse.data?.page || page, limit: appointmentsResponse.data?.limit || pageSize, total: appointmentsResponse.data?.total || 0, pages: appointmentsResponse.data?.pages || 1 });
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'Appointment data could not be loaded. Please try again.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, search, statusFilter, dateFilter]);
 
   useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
     loadData();
   }, [loadData]);
 
@@ -73,17 +75,7 @@ function AppointmentsPage() {
     });
   }, [data]);
 
-  const filteredAppointments = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return resolvedAppointments.filter((appointment) => {
-      const matchesSearch = !query || [appointment.patientName, appointment.doctorName, appointment.reason, appointment.status]
-        .some((value) => value?.toLowerCase().includes(query));
-      const matchesStatus = !statusFilter || appointment.status === statusFilter;
-      const matchesDate = !dateFilter || new Date(appointment.dateTime).toISOString().slice(0, 10) === dateFilter;
-      return matchesSearch && matchesStatus && matchesDate;
-    });
-  }, [resolvedAppointments, search, statusFilter, dateFilter]);
+  const filteredAppointments = useMemo(() => resolvedAppointments, [resolvedAppointments]);
 
   const closeModal = () => {
     if (!saving) {
@@ -152,12 +144,13 @@ function AppointmentsPage() {
 
         <section className="appointments-management-card">
           <div className="appointments-toolbar">
-            <label className="appointment-search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patient, doctor, reason, or status" aria-label="Search appointments" /></label>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status"><option value="">All statuses</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
-            <input className="appointment-date-filter" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Filter by date" />
-            <span className="appointments-count">{loading ? 'Loading…' : `${filteredAppointments.length} appointment${filteredAppointments.length === 1 ? '' : 's'}`}</span>
+            <label className="appointment-search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search by patient or doctor" aria-label="Search appointments" /></label>
+            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by status"><option value="">All statuses</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="no_show">No-show</option></select>
+            <input className="appointment-date-filter" type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setPage(1); }} aria-label="Filter by date" />
+            <span className="appointments-count">{loading ? 'Loading…' : `${pagination.total} appointment${pagination.total === 1 ? '' : 's'}`}</span>
           </div>
           <AppointmentTable appointments={filteredAppointments} loading={loading} canEdit={canEdit} canDelete={canDelete} onEdit={(appointment) => { setFormError(''); setModalAppointment(appointment); }} onDelete={handleDelete} deletingId={deletingId} />
+          {!loading && <div className="appointment-pagination"><label>Rows per page<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} aria-label="Appointments per page"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><span>Page {pagination.page} of {pagination.pages}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><button type="button" disabled={page >= pagination.pages} onClick={() => setPage((current) => current + 1)}>Next</button></div></div>}
         </section>
       </div>
 

@@ -2,7 +2,7 @@ const navigationGroups = [
   { label: 'Overview', items: [{ label: 'Dashboard', icon: '▦', path: '/app' }] },
   { label: 'Clinical', items: [{ label: 'Patients', icon: '♙', path: '/app/patients' }, { label: 'Doctors', icon: '✚', path: '/app/doctors' }, { label: 'Appointments', icon: '◷', path: '/app/appointments' }, { label: 'Queue', icon: '▤', path: '/app/queue' }, { label: 'Prescriptions', icon: '▤', path: '/app/prescriptions' }] },
   { label: 'Operations', items: [{ label: 'Billing', icon: '◈', path: '/app/billing' }, { label: 'Reports & Analytics', icon: '▥', path: '/app/reports' }] },
-  { label: 'System', items: [{ label: 'User Management', icon: '♙', path: '/app/users', adminOnly: true }, { label: 'Settings', icon: '⚙', comingSoon: true, adminOnly: true }] },
+  { label: 'System', items: [{ label: 'User Management', icon: '♙', path: '/app/users', adminOnly: true }] },
 ];
 
 function Sidebar({ activeItem, isOpen, onClose, onSelect, userRole }) {

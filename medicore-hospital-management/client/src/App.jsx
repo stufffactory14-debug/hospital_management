@@ -12,6 +12,8 @@ import BillingPage from './pages/BillingPage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
 import QueuePage from './pages/QueuePage';
+import ClinicalWorkspace from './pages/ClinicalWorkspace';
+import PatientWorkspace from './pages/PatientWorkspace';
 
 function App() {
   return (
@@ -20,6 +22,7 @@ function App() {
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/app" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/app/patients" element={<ProtectedRoute><PatientsPage /></ProtectedRoute>} />
+      <Route path="/app/patients/:id" element={<ProtectedRoute><PatientWorkspace /></ProtectedRoute>} />
       <Route path="/app/doctors" element={<ProtectedRoute><DoctorsPage /></ProtectedRoute>} />
       <Route path="/app/appointments" element={<ProtectedRoute><AppointmentsPage /></ProtectedRoute>} />
       <Route path="/app/prescriptions" element={<ProtectedRoute><PrescriptionsPage /></ProtectedRoute>} />
@@ -27,6 +30,7 @@ function App() {
       <Route path="/app/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="/app/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
       <Route path="/app/queue" element={<ProtectedRoute><QueuePage /></ProtectedRoute>} />
+      <Route path="/app/clinical" element={<ProtectedRoute><ClinicalWorkspace /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );

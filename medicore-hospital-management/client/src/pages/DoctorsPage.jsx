@@ -5,6 +5,7 @@ import DoctorTable from '../components/doctors/DoctorTable';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import './DoctorsPage.css';
+import './DoctorsPagination.css';
 
 const getErrorMessage = (error, fallback) => error.response?.data?.message || fallback;
 const cleanDoctorPayload = (doctor) => Object.fromEntries(
@@ -14,6 +15,9 @@ const cleanDoctorPayload = (doctor) => Object.fromEntries(
 function DoctorsPage() {
   const [doctors, setDoctors] = useState([]);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,26 +33,21 @@ function DoctorsPage() {
     setError('');
 
     try {
-      const response = await api.get('/doctors');
+      const response = await api.get('/doctors', { params: { page, limit: pageSize, search: search.trim() || undefined } });
       setDoctors(Array.isArray(response.data?.data) ? response.data.data : []);
+      setPagination(response.data?.pagination || { page: response.data?.page || page, limit: response.data?.limit || pageSize, total: response.data?.total || 0, pages: response.data?.pages || 1 });
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'Doctor records could not be loaded. Please try again.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, search]);
 
   useEffect(() => {
     loadDoctors();
   }, [loadDoctors]);
 
-  const filteredDoctors = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return doctors;
-
-    return doctors.filter((doctor) => [doctor.name, doctor.phone, doctor.email, doctor.specialization, doctor.department]
-      .some((value) => value?.toLowerCase().includes(query)));
-  }, [doctors, search]);
+  const filteredDoctors = useMemo(() => doctors, [doctors]);
 
   const closeModal = () => {
     if (!saving) {
@@ -125,10 +124,11 @@ function DoctorsPage() {
 
         <section className="doctors-card">
           <div className="doctors-toolbar">
-            <label className="doctor-search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, contact, specialty, or department" aria-label="Search doctors" /></label>
-            <span className="doctors-count">{loading ? 'Loading…' : `${filteredDoctors.length} doctor${filteredDoctors.length === 1 ? '' : 's'}`}</span>
+            <label className="doctor-search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search by name, email, or specialization" aria-label="Search doctors" /></label>
+            <span className="doctors-count">{loading ? 'Loading…' : `${pagination.total} doctor${pagination.total === 1 ? '' : 's'}`}</span>
           </div>
           <DoctorTable doctors={filteredDoctors} loading={loading} isAdmin={isAdmin} onEdit={(doctor) => { setFormError(''); setModalDoctor(doctor); }} onDelete={handleDelete} deletingId={deletingId} />
+          {!loading && <div className="doctor-pagination"><label>Rows per page<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} aria-label="Doctors per page"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><span>Page {pagination.page} of {pagination.pages}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><button type="button" disabled={page >= pagination.pages} onClick={() => setPage((current) => current + 1)}>Next</button></div></div>}
         </section>
       </div>
 

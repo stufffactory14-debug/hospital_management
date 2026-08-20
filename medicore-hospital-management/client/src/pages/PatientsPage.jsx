@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import PatientModal from '../components/patients/PatientModal';
 import PatientTable from '../components/patients/PatientTable';
+import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import './PatientsPage.css';
+import './PatientsPagination.css';
 
 const getErrorMessage = (error, fallback) => error.response?.data?.message || fallback;
 
@@ -14,6 +16,9 @@ const cleanPatientPayload = (patient) => Object.fromEntries(
 function PatientsPage() {
   const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -21,32 +26,30 @@ function PatientsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const { user } = useAuth();
+  const canEdit = ['admin', 'receptionist'].includes(user?.role);
+  const canDelete = user?.role === 'admin';
 
   const loadPatients = useCallback(async () => {
     setLoading(true);
     setError('');
 
     try {
-      const response = await api.get('/patients');
+      const response = await api.get('/patients', { params: { page, limit: pageSize, search: search.trim() || undefined } });
       setPatients(Array.isArray(response.data?.data) ? response.data.data : []);
+      setPagination(response.data?.pagination || { page, limit: pageSize, total: 0, pages: 1 });
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'Patient records could not be loaded. Please try again.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, search]);
 
   useEffect(() => {
     loadPatients();
   }, [loadPatients]);
 
-  const filteredPatients = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return patients;
-
-    return patients.filter((patient) => [patient.name, patient.phone, patient.email]
-      .some((value) => value?.toLowerCase().includes(query)));
-  }, [patients, search]);
+  const filteredPatients = useMemo(() => patients, [patients]);
 
   const closeModal = () => {
     if (!saving) {
@@ -75,7 +78,7 @@ function PatientsPage() {
         setPatients((current) => current.map((patient) => patient._id === savedPatient._id ? savedPatient : patient));
         setSuccess('Patient updated successfully.');
       } else {
-        setPatients((current) => [savedPatient, ...current]);
+      setPatients((current) => [savedPatient, ...current].slice(0, pageSize));
         setSuccess('Patient added successfully.');
       }
 
@@ -96,6 +99,7 @@ function PatientsPage() {
     try {
       await api.delete(`/patients/${patient._id}`);
       setPatients((current) => current.filter((item) => item._id !== patient._id));
+      setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1), pages: Math.max(1, Math.ceil(Math.max(0, current.total - 1) / current.limit)) }));
       setSuccess('Patient deleted successfully.');
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'Patient could not be deleted. Please try again.'));
@@ -109,7 +113,7 @@ function PatientsPage() {
       <div className="dashboard-content patients-content">
         <section className="patients-page-heading">
           <div><p className="section-label">Patient directory</p><h2>Patients</h2><p>Manage patient records and contact details in one place.</p></div>
-          <button className="add-patient-button" type="button" onClick={() => { setFormError(''); setModalPatient(null); }}>+ Add Patient</button>
+          {canEdit && <button className="add-patient-button" type="button" onClick={() => { setFormError(''); setModalPatient(null); }}>+ Add Patient</button>}
         </section>
 
         {success && <p className="patients-feedback success-feedback" role="status">{success}</p>}
@@ -117,14 +121,15 @@ function PatientsPage() {
 
         <section className="patients-card">
           <div className="patients-toolbar">
-            <label className="search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, phone, or email" aria-label="Search patients" /></label>
-            <span className="patients-count">{loading ? 'Loading…' : `${filteredPatients.length} patient${filteredPatients.length === 1 ? '' : 's'}`}</span>
+            <label className="search-field"><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search by name, phone, or email" aria-label="Search patients" /></label>
+            <span className="patients-count">{loading ? 'Loading…' : `${pagination.total} patient${pagination.total === 1 ? '' : 's'}`}</span>
           </div>
-          <PatientTable patients={filteredPatients} loading={loading} onEdit={(patient) => { setFormError(''); setModalPatient(patient); }} onDelete={handleDelete} deletingId={deletingId} />
+          <PatientTable patients={filteredPatients} loading={loading} canEdit={canEdit} canDelete={canDelete} onEdit={(patient) => { setFormError(''); setModalPatient(patient); }} onDelete={handleDelete} deletingId={deletingId} />
+          {!loading && <div className="patient-pagination"><label>Rows per page<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} aria-label="Patients per page"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><span>Page {pagination.page} of {pagination.pages}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><button type="button" disabled={page >= pagination.pages} onClick={() => setPage((current) => current + 1)}>Next</button></div></div>}
         </section>
       </div>
 
-      {modalPatient !== undefined && <PatientModal patient={modalPatient} onClose={closeModal} onSubmit={handleSave} saving={saving} error={formError} />}
+      {canEdit && modalPatient !== undefined && <PatientModal patient={modalPatient} onClose={closeModal} onSubmit={handleSave} saving={saving} error={formError} />}
     </DashboardLayout>
   );
 }

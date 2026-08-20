@@ -12,8 +12,22 @@ const sendValidationError = (res, error) =>
 
 const getDoctors = async (req, res) => {
   try {
-    const doctors = await Doctor.find().select('name email phone specialization department qualification experience createdAt updatedAt').sort({ createdAt: -1 });
-    res.status(200).json({ success: true, data: doctors });
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const requestedLimit = Number.parseInt(req.query.limit, 10) || 10;
+    const limit = [10, 20, 50].includes(requestedLimit) ? requestedLimit : 10;
+    const search = String(req.query.search || '').trim();
+    const paginated = Object.hasOwn(req.query, 'page') || Object.hasOwn(req.query, 'limit') || Boolean(search);
+    const filter = {};
+    if (search) {
+      const expression = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ name: expression }, { email: expression }, { specialization: expression }];
+    }
+    const projection = 'name email phone specialization department qualification experience createdAt updatedAt';
+    const [doctors, total] = await Promise.all([
+      paginated ? Doctor.find(filter).select(projection).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit) : Doctor.find(filter).select(projection).sort({ createdAt: -1 }),
+      Doctor.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, data: doctors, page, limit, total, pages: Math.ceil(total / limit) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Unable to retrieve doctors' });
   }

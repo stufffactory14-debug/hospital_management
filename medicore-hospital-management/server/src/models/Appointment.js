@@ -24,20 +24,21 @@ const appointmentSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['scheduled', 'completed', 'cancelled'],
-        message: 'Appointment status must be scheduled, completed, or cancelled',
+        values: ['scheduled', 'completed', 'cancelled', 'no_show'],
+        message: 'Appointment status must be scheduled, completed, cancelled, or no-show',
       },
       default: 'scheduled',
     },
     queueStatus: {
       type: String,
-      enum: ['waiting', 'called', 'in_consultation', 'completed', 'cancelled'],
+      enum: ['waiting', 'called', 'in_consultation', 'completed', 'cancelled', 'no_show'],
     },
     queueNumber: { type: Number, min: 1 },
     queueDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ },
     calledAt: Date,
     consultationStartedAt: Date,
     consultationCompletedAt: Date,
+    noShowAt: Date,
   },
   { timestamps: true }
 );

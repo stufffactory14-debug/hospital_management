@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const statusOptions = ['scheduled', 'completed', 'cancelled'];
+const statusOptions = ['scheduled', 'completed', 'cancelled', 'no_show'];
 
 const getReferenceId = (reference) => {
   if (!reference) return '';

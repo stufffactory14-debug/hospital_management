@@ -40,10 +40,14 @@ const sameReference = (left, right) => String(left) === String(right);
 
 const isDoctorUser = (req) => req.user?.role === 'doctor';
 
-const getDoctorScope = (req, res) => {
+const getDoctorScope = (req, res, requestedDoctor) => {
   if (!isDoctorUser(req)) return null;
   if (!req.user.doctorId) {
     res.status(403).json({ success: false, message: 'Doctor account is not linked to a Doctor profile' });
+    return undefined;
+  }
+  if (requestedDoctor && String(requestedDoctor) !== String(req.user.doctorId)) {
+    res.status(403).json({ success: false, message: 'Doctors can only access their own prescriptions' });
     return undefined;
   }
   return req.user.doctorId;
@@ -79,10 +83,32 @@ const validateReferences = async (patientId, doctorId, appointmentId) => {
 
 const getPrescriptions = async (req, res) => {
   try {
-    const doctorId = getDoctorScope(req, res);
+    const requestedDoctor = req.query.doctor;
+    if (requestedDoctor && !mongoose.isValidObjectId(requestedDoctor)) return res.status(400).json({ success: false, message: 'Invalid doctor ID' });
+    const doctorId = getDoctorScope(req, res, requestedDoctor);
     if (isDoctorUser(req) && doctorId === undefined) return;
-    const prescriptions = await populatePrescription(Prescription.find(doctorId ? { doctor: doctorId } : {}).sort({ createdAt: -1 }));
-    return res.status(200).json({ success: true, data: prescriptions.map((prescription) => serializePrescription(prescription, req.user.role)) });
+    const filter = doctorId ? { doctor: doctorId } : {};
+    const { search, date } = req.query;
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, message: 'Prescription date must use YYYY-MM-DD format' });
+      const from = new Date(`${date}T00:00:00.000Z`); const to = new Date(from); to.setUTCDate(to.getUTCDate() + 1);
+      if (Number.isNaN(from.getTime())) return res.status(400).json({ success: false, message: 'Invalid prescription date' });
+      filter.createdAt = { $gte: from, $lt: to };
+    }
+    if (search?.trim()) {
+      const expression = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const [patients, doctors] = await Promise.all([Patient.find({ name: expression }).select('_id'), Doctor.find({ name: expression }).select('_id')]);
+      filter.$or = [{ patient: { $in: patients.map((patient) => patient._id) } }, { doctor: { $in: doctors.map((doctor) => doctor._id) } }];
+    }
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const requestedLimit = Number.parseInt(req.query.limit, 10) || 10;
+    const limit = [10, 20, 50].includes(requestedLimit) ? requestedLimit : 10;
+    const paginated = Object.hasOwn(req.query, 'page') || Object.hasOwn(req.query, 'limit') || Boolean(search) || Boolean(date);
+    const [prescriptions, total] = await Promise.all([
+      paginated ? populatePrescription(Prescription.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit)) : populatePrescription(Prescription.find(filter).sort({ createdAt: -1 })),
+      Prescription.countDocuments(filter),
+    ]);
+    return res.status(200).json({ success: true, data: prescriptions.map((prescription) => serializePrescription(prescription, req.user.role)), page, limit, total, pages: Math.ceil(total / limit) });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Unable to retrieve prescriptions' });
   }

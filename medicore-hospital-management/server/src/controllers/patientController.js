@@ -35,8 +35,21 @@ const getPatients = async (req, res) => {
   try {
     const ids = await doctorPatientIds(req, res);
     if (isDoctor(req) && ids === undefined) return;
-    const patients = await Patient.find(ids ? { _id: { $in: ids } } : {}).sort({ createdAt: -1 });
-    res.status(200).json({ success: true, data: patients.map((patient) => serializePatient(patient, req.user.role)) });
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const requestedLimit = Number.parseInt(req.query.limit, 10) || 10;
+    const limit = [10, 20, 50].includes(requestedLimit) ? requestedLimit : 10;
+    const search = String(req.query.search || '').trim();
+    const paginated = Object.hasOwn(req.query, 'page') || Object.hasOwn(req.query, 'limit') || Boolean(search);
+    const filter = ids ? { _id: { $in: ids } } : {};
+    if (search) {
+      const expression = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ name: expression }, { email: expression }, { phone: expression }];
+    }
+    const [patients, total] = await Promise.all([
+      paginated ? Patient.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit) : Patient.find(filter).sort({ createdAt: -1 }),
+      Patient.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, data: patients.map((patient) => serializePatient(patient, req.user.role)), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Unable to retrieve patients' });
   }

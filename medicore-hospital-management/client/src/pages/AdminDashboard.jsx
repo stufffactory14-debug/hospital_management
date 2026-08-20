@@ -1,149 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import QuickActions from '../components/dashboard/QuickActions';
-import RecentAppointments from '../components/dashboard/RecentAppointments';
-import AppointmentStatusDistribution from '../components/dashboard/AppointmentStatusDistribution';
-import UpcomingAppointments from '../components/dashboard/UpcomingAppointments';
-import RecentActivity from '../components/dashboard/RecentActivity';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
-import StatCard from '../components/dashboard/StatCard';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import './AdminDashboard.css';
 
-const getCollection = (response) => (Array.isArray(response.data?.data) ? response.data.data : []);
-
-const isToday = (dateValue) => {
-  const date = new Date(dateValue);
-  const today = new Date();
-
-  return !Number.isNaN(date.getTime())
-    && date.getFullYear() === today.getFullYear()
-    && date.getMonth() === today.getMonth()
-    && date.getDate() === today.getDate();
-};
-
-const getReferenceId = (reference) => {
-  if (!reference) return null;
-  return typeof reference === 'object' ? reference._id : reference;
-};
+const collection = (response) => (Array.isArray(response.data?.data) ? response.data.data : []);
+const today = () => new Date().toISOString().slice(0, 10);
+const isToday = (value) => value && new Date(value).toISOString().slice(0, 10) === today();
+const formatTime = (value) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? 'Time unavailable' : new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' }).format(date); };
+const statusLabel = (value) => value?.replace('_', ' ') || 'Unknown';
 
 function AdminDashboard() {
-  const [data, setData] = useState({ patients: [], doctors: [], appointments: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const hasFetched = useRef(false);
-  const { user } = useAuth();
-
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [patientsResponse, doctorsResponse, appointmentsResponse] = await Promise.all([
-        api.get('/patients'),
-        api.get('/doctors'),
-        api.get('/appointments'),
-      ]);
-
-      setData({
-        patients: getCollection(patientsResponse),
-        doctors: getCollection(doctorsResponse),
-        appointments: getCollection(appointmentsResponse),
-      });
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Dashboard data could not be loaded. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-    loadDashboard();
-  }, [loadDashboard]);
-
-  const stats = useMemo(() => {
-    const todayAppointments = data.appointments.filter((appointment) => isToday(appointment.dateTime));
-    const pendingAppointments = data.appointments.filter(
-      (appointment) => appointment.status?.toLowerCase() === 'scheduled'
-    );
-
-    return [
-      { label: 'Total Patients', value: loading ? '—' : data.patients.length, trend: 'Registered patients', tone: 'teal' },
-      { label: 'Total Doctors', value: loading ? '—' : data.doctors.length, trend: 'Active doctor records', tone: 'blue' },
-      { label: 'Today’s Appointments', value: loading ? '—' : todayAppointments.length, trend: 'Appointments dated today', tone: 'violet' },
-      { label: 'Pending Appointments', value: loading ? '—' : pendingAppointments.length, trend: 'Scheduled appointments', tone: 'amber' },
-    ];
-  }, [data, loading]);
-
-  const recentAppointments = useMemo(() => {
-    const patientsById = new Map(data.patients.map((patient) => [String(patient._id), patient]));
-    const doctorsById = new Map(data.doctors.map((doctor) => [String(doctor._id), doctor]));
-
-    return data.appointments.slice(0, 5).map((appointment) => {
-      const patientReference = getReferenceId(appointment.patient);
-      const doctorReference = getReferenceId(appointment.doctor);
-      const patient = typeof appointment.patient === 'object'
-        ? appointment.patient
-        : patientsById.get(String(patientReference));
-      const doctor = typeof appointment.doctor === 'object'
-        ? appointment.doctor
-        : doctorsById.get(String(doctorReference));
-
-      return {
-        ...appointment,
-        patientName: patient?.name || 'Unknown patient',
-        doctorName: doctor?.name || 'Unknown doctor',
-      };
-    });
-  }, [data]);
-
-  const upcomingAppointments = useMemo(() => recentAppointments
-    .filter((appointment) => new Date(appointment.dateTime).getTime() >= Date.now() && appointment.status === 'scheduled')
-    .sort((first, second) => new Date(first.dateTime) - new Date(second.dateTime))
-    .slice(0, 4), [recentAppointments]);
-
-  const activityAppointments = useMemo(() => [...recentAppointments]
-    .sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt)), [recentAppointments]);
-
-  return (
-    <DashboardLayout activeItem="Dashboard" title="Dashboard">
-      <div className="dashboard-content">
-          <section className="welcome-banner">
-            <div>
-              <p className="section-label">MediCore command center</p>
-              <h2>Good morning, {user.name?.split(' ')[0]}.</h2>
-              <p>Here’s a concise view of today’s hospital operations.</p>
-            </div>
-            <span className="welcome-mark" aria-hidden="true">✚</span>
-          </section>
-
-          {error && (
-            <section className="dashboard-alert" role="alert">
-              <span>{error}</span>
-              <button type="button" onClick={loadDashboard}>Try again</button>
-            </section>
-          )}
-
-          <section className="stats-grid" aria-label="Hospital statistics">
-            {stats.map((stat) => <StatCard key={stat.label} {...stat} />)}
-          </section>
-
-          <section className="dashboard-lower-grid">
-            <RecentAppointments appointments={recentAppointments} loading={loading} error={Boolean(error)} />
-            <AppointmentStatusDistribution appointments={data.appointments} loading={loading} />
-          </section>
-
-          <section className="dashboard-lower-grid dashboard-lower-grid-secondary">
-            <UpcomingAppointments appointments={upcomingAppointments} loading={loading} />
-            <QuickActions />
-          </section>
-
-          <RecentActivity appointments={activityAppointments} loading={loading} />
-      </div>
-    </DashboardLayout>
-  );
+  const { user } = useAuth(); const navigate = useNavigate();
+  const [data, setData] = useState({ patients: [], doctors: [], appointments: [], queue: [] }); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const role = user?.role; const isDoctor = role === 'doctor';
+  const loadDashboard = useCallback(async () => { setLoading(true); setError(''); const requests = await Promise.allSettled([api.get('/patients'), api.get('/doctors'), api.get('/appointments'), api.get('/queue', { params: { date: today() } })]); const [patients, doctors, appointments, queue] = requests.map((result) => result.status === 'fulfilled' ? collection(result.value) : []); setData({ patients, doctors, appointments, queue }); if (requests.some((result) => result.status === 'rejected')) setError('Some operational data could not be loaded.'); setLoading(false); }, []);
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  const todayAppointments = useMemo(() => data.appointments.filter((item) => isToday(item.dateTime)), [data.appointments]);
+  const queueToday = useMemo(() => data.queue.filter((item) => isToday(item.dateTime)), [data.queue]);
+  const stats = useMemo(() => [{ label: isDoctor ? 'My appointments' : 'Today’s appointments', value: todayAppointments.length, path: '/app/appointments' }, { label: 'Waiting', value: queueToday.filter((item) => item.queueStatus === 'waiting').length, path: '/app/queue' }, { label: 'In consultation', value: queueToday.filter((item) => item.queueStatus === 'in_consultation').length, path: '/app/queue' }, { label: 'Completed today', value: queueToday.filter((item) => item.queueStatus === 'completed').length, path: '/app/queue' }], [isDoctor, todayAppointments, queueToday]);
+  const flow = useMemo(() => queueToday.filter((item) => ['waiting', 'called', 'in_consultation'].includes(item.queueStatus)).sort((a, b) => (a.queueNumber || 0) - (b.queueNumber || 0)).slice(0, 6), [queueToday]);
+  const upcoming = useMemo(() => todayAppointments.filter((item) => item.status === 'scheduled' && new Date(item.dateTime).getTime() >= Date.now()).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime)).slice(0, 5), [todayAppointments]);
+  const current = queueToday.find((item) => item.queueStatus === 'in_consultation') || queueToday.find((item) => item.queueStatus === 'called');
+  const actions = isDoctor ? [{ label: 'Open my queue', path: '/app/queue' }, { label: 'View patients', path: '/app/patients' }, { label: 'Create prescription', path: '/app/prescriptions' }] : role === 'receptionist' ? [{ label: 'Register patient', path: '/app/patients' }, { label: 'Schedule appointment', path: '/app/appointments' }, { label: 'Open queue', path: '/app/queue' }, { label: 'Create invoice', path: '/app/billing' }] : [{ label: 'Register patient', path: '/app/patients' }, { label: 'Add doctor', path: '/app/doctors' }, { label: 'Schedule appointment', path: '/app/appointments' }, { label: 'Open queue', path: '/app/queue' }];
+  const primaryAction = isDoctor ? { label: 'Open clinical desk', path: '/app/clinical' } : role === 'receptionist' ? { label: 'Register patient', path: '/app/patients' } : { label: 'New appointment', path: '/app/appointments' };
+  return <DashboardLayout activeItem="Dashboard" title="Dashboard"><div className="dashboard-content command-dashboard"><section className="command-hero"><div><p className="section-label">MediCore command center</p><h2>Good morning, {user?.name?.split(' ')[0] || 'there'}.</h2><p>Here’s what needs attention across today’s operations.</p></div><button type="button" onClick={() => navigate(primaryAction.path)}>{primaryAction.label}</button></section>{error && <section className="dashboard-alert" role="alert"><span>{error}</span><button type="button" onClick={loadDashboard}>Retry</button></section>}<section className="command-stats" aria-label="Today’s operational summary">{stats.map((stat) => <button type="button" className="command-stat" key={stat.label} onClick={() => navigate(stat.path)}><span>{stat.label}</span><strong>{loading ? '—' : stat.value}</strong><small>View details →</small></button>)}</section><section className="command-grid"><section className="command-panel command-flow"><div className="command-panel-heading"><div><p className="section-label">Live operations</p><h3>Today’s patient flow</h3></div><button type="button" onClick={() => navigate('/app/appointments')}>View appointments</button></div>{loading ? <p className="data-state">Loading today’s patient flow…</p> : !flow.length ? <p className="data-state">No active queue activity today.</p> : <div className="flow-list">{flow.map((item) => <button className="flow-row" type="button" key={item._id} onClick={() => navigate('/app/queue')}><span className="flow-number">#{item.queueNumber || '—'}</span><span><b>{item.patient?.name || 'Unknown patient'}</b><small>{item.doctor?.name || 'Unknown doctor'} · {formatTime(item.dateTime)}</small></span><em className={`appointment-status status-${item.queueStatus}`}>{statusLabel(item.queueStatus)}</em></button>)}</div>}</section><section className="command-panel workload-panel"><div className="command-panel-heading"><div><p className="section-label">Operational load</p><h3>Current workload</h3></div></div>{current && <p className="workload-focus"><strong>{current.patient?.name || 'Unknown patient'}</strong><span>{current.queueStatus === 'in_consultation' ? 'In consultation' : 'Called next'} · {current.doctor?.name || 'Unknown doctor'}</span></p>}<div className="workload-bars">{[['Waiting', 'waiting'], ['In consultation', 'in_consultation'], ['Completed', 'completed']].map(([label, key]) => { const count = queueToday.filter((item) => item.queueStatus === key).length; const max = Math.max(queueToday.length, 1); return <div key={key}><div><span>{label}</span><b>{count}</b></div><span className={`workload-track workload-${key}`}><i style={{ width: `${(count / max) * 100}%` }} /></span></div>; })}</div><button className="panel-link" type="button" onClick={() => navigate('/app/queue')}>Open queue →</button></section></section><section className="command-grid command-grid-secondary"><section className="command-panel"><div className="command-panel-heading"><div><p className="section-label">Schedule</p><h3>Upcoming appointments</h3></div><button type="button" onClick={() => navigate('/app/appointments')}>View schedule</button></div>{loading ? <p className="data-state">Loading schedule…</p> : !upcoming.length ? <p className="data-state">No further appointments scheduled today.</p> : <div className="upcoming-command-list">{upcoming.map((item) => <div key={item._id}><strong>{item.patient?.name || 'Patient appointment'}</strong><span>{item.doctor?.name || 'Unknown doctor'} · {formatTime(item.dateTime)}</span></div>)}</div>}</section><section className="command-panel"><div className="command-panel-heading"><div><p className="section-label">Attention</p><h3>Quick actions</h3></div></div><div className="command-actions">{actions.map((action) => <button type="button" key={action.label} onClick={() => navigate(action.path)}>{action.label}<span>→</span></button>)}</div></section></section></div></DashboardLayout>;
 }
 
 export default AdminDashboard;

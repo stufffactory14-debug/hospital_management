@@ -2,12 +2,15 @@ const mongoose = require('mongoose');
 const Appointment = require('../models/Appointment');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
+const { notifyAppointmentEvent } = require('../services/notificationService');
+const { dateKey, appointmentDateKey, ensureQueueEntryForAppointment } = require('../services/queueService');
 
-const VALID_STATUSES = ['scheduled', 'completed', 'cancelled'];
+const VALID_STATUSES = ['scheduled', 'completed', 'cancelled', 'no_show'];
 const ALLOWED_STATUS_TRANSITIONS = {
-  scheduled: ['scheduled', 'completed', 'cancelled'],
+  scheduled: ['scheduled', 'completed', 'cancelled', 'no_show'],
   completed: ['completed'],
   cancelled: ['cancelled'],
+  no_show: ['no_show'],
 };
 
 const sendInvalidIdResponse = (res) =>
@@ -26,10 +29,14 @@ const parseDateTime = (value) => {
 
 const isDoctorUser = (req) => req.user?.role === 'doctor';
 
-const getDoctorScope = (req, res) => {
+const getDoctorScope = (req, res, requestedDoctor) => {
   if (!isDoctorUser(req)) return null;
   if (!req.user.doctorId) {
     res.status(403).json({ success: false, message: 'Doctor account is not linked to a Doctor profile' });
+    return undefined;
+  }
+  if (requestedDoctor && String(requestedDoctor) !== String(req.user.doctorId)) {
+    res.status(403).json({ success: false, message: 'Doctors can only access their own appointments' });
     return undefined;
   }
   return req.user.doctorId;
@@ -37,13 +44,13 @@ const getDoctorScope = (req, res) => {
 
 const findSchedulingConflict = async ({ patientId, doctorId, dateTime, excludeId }) => {
   const exclusion = excludeId ? { _id: { $ne: excludeId } } : {};
-  const doctorConflict = await Appointment.findOne({ ...exclusion, doctor: doctorId, dateTime, status: { $ne: 'cancelled' } });
+  const doctorConflict = await Appointment.findOne({ ...exclusion, doctor: doctorId, dateTime, status: { $nin: ['cancelled', 'no_show'] } });
 
   if (doctorConflict) {
     return { message: 'Doctor already has an appointment at this time' };
   }
 
-  const patientConflict = await Appointment.findOne({ ...exclusion, patient: patientId, dateTime, status: { $ne: 'cancelled' } });
+  const patientConflict = await Appointment.findOne({ ...exclusion, patient: patientId, dateTime, status: { $nin: ['cancelled', 'no_show'] } });
 
   if (patientConflict) {
     return { message: 'Patient already has an appointment at this time' };
@@ -54,7 +61,7 @@ const findSchedulingConflict = async ({ patientId, doctorId, dateTime, excludeId
 
 const validateStatusTransition = (currentStatus, nextStatus) => {
   if (!VALID_STATUSES.includes(nextStatus)) {
-    return 'Appointment status must be scheduled, completed, or cancelled';
+    return 'Appointment status must be scheduled, completed, cancelled, or no-show';
   }
 
   if (!ALLOWED_STATUS_TRANSITIONS[currentStatus]?.includes(nextStatus)) {
@@ -99,10 +106,36 @@ const validateReferences = async (patientId, doctorId) => {
 
 const getAppointments = async (req, res) => {
   try {
-    const doctorId = getDoctorScope(req, res);
+    const requestedDoctor = req.query.doctor;
+    if (requestedDoctor && !mongoose.isValidObjectId(requestedDoctor)) {
+      return res.status(400).json({ success: false, message: 'Invalid doctor ID' });
+    }
+    const doctorId = getDoctorScope(req, res, requestedDoctor);
     if (isDoctorUser(req) && doctorId === undefined) return;
-    const appointments = await Appointment.find(doctorId ? { doctor: doctorId } : {}).sort({ dateTime: 1 });
-    res.status(200).json({ success: true, data: appointments });
+    const filter = doctorId ? { doctor: doctorId } : {};
+    const { status, date, search } = req.query;
+    if (status && !VALID_STATUSES.includes(status)) return res.status(400).json({ success: false, message: 'Invalid appointment status' });
+    if (status) filter.status = status;
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, message: 'Appointment date must use YYYY-MM-DD format' });
+      const from = new Date(`${date}T00:00:00.000Z`); const to = new Date(from); to.setUTCDate(to.getUTCDate() + 1);
+      if (Number.isNaN(from.getTime())) return res.status(400).json({ success: false, message: 'Invalid appointment date' });
+      filter.dateTime = { $gte: from, $lt: to };
+    }
+    if (search?.trim()) {
+      const expression = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const [patients, doctors] = await Promise.all([Patient.find({ name: expression }).select('_id'), Doctor.find({ name: expression }).select('_id')]);
+      filter.$or = [{ patient: { $in: patients.map((patient) => patient._id) } }, { doctor: { $in: doctors.map((doctor) => doctor._id) } }];
+    }
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const requestedLimit = Number.parseInt(req.query.limit, 10) || 10;
+    const limit = [10, 20, 50].includes(requestedLimit) ? requestedLimit : 10;
+    const paginated = Object.hasOwn(req.query, 'page') || Object.hasOwn(req.query, 'limit') || status || date || search;
+    const [appointments, total] = await Promise.all([
+      paginated ? Appointment.find(filter).sort({ dateTime: 1 }).skip((page - 1) * limit).limit(limit) : Appointment.find(filter).sort({ dateTime: 1 }),
+      Appointment.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, data: appointments, page, limit, total, pages: Math.ceil(total / limit) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Unable to retrieve appointments' });
   }
@@ -158,6 +191,11 @@ const createAppointment = async (req, res) => {
 
     const payload = { ...req.body, doctor: requestedDoctorId, dateTime };
     const appointment = await Appointment.create(payload);
+    const queueDate = appointmentDateKey(req.body.dateTime) || dateKey(dateTime);
+    if (queueDate === dateKey()) {
+      await ensureQueueEntryForAppointment(appointment._id, queueDate);
+    }
+    await notifyAppointmentEvent(appointment._id, 'scheduled');
     return res.status(201).json({ success: true, data: appointment });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') {
@@ -215,10 +253,19 @@ const updateAppointment = async (req, res) => {
     }
 
     const payload = { ...req.body, doctor: doctorId, dateTime };
+    if (nextStatus === 'no_show') payload.noShowAt = new Date();
     const appointment = await Appointment.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
+
+    if (nextStatus === 'no_show') {
+      await ensureQueueEntryForAppointment(appointment._id, appointmentDateKey(req.body.dateTime ?? existingAppointment.dateTime));
+    }
+
+    if (existingAppointment.status !== nextStatus && ['cancelled', 'completed', 'no_show'].includes(nextStatus)) {
+      await notifyAppointmentEvent(appointment._id, nextStatus);
+    }
 
     return res.status(200).json({ success: true, data: appointment });
   } catch (error) {
