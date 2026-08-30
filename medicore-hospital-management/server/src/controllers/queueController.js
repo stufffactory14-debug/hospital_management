@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Appointment = require('../models/Appointment');
-const { notifyAppointmentEvent } = require('../services/notificationService');
+const { notifyAppointmentEvent, notifyPatientQueueCalled } = require('../services/notificationService');
 const { dateKey, ensureQueueEntryForAppointment } = require('../services/queueService');
 
 const transitions = {
@@ -79,11 +79,13 @@ const updateQueueStatus = async (req, res) => {
     if (isDoctor(req) && doctor === undefined) return;
     const session = await mongoose.startSession();
     let updated;
+    let wasWaiting = false;
     try {
       await session.withTransaction(async () => {
         const entry = await Appointment.findOne({ _id: req.params.id, queueDate: { $exists: true }, ...(doctor ? { doctor } : {}) }).session(session);
         if (!entry) { const error = new Error('Queue entry not found'); error.status = 404; throw error; }
         const current = entry.queueStatus || 'waiting';
+        wasWaiting = current === 'waiting';
         const roleAllowed = req.user.role === 'admin'
           || (req.user.role === 'receptionist' && ['called', 'cancelled', 'no_show'].includes(nextStatus))
           || (req.user.role === 'doctor' && ['called', 'in_consultation', 'completed'].includes(nextStatus));
@@ -101,7 +103,8 @@ const updateQueueStatus = async (req, res) => {
     const populated = await populate(Appointment.findById(updated._id));
     const event = nextStatus === 'cancelled' ? 'cancelled' : nextStatus === 'called' ? 'called' : nextStatus === 'in_consultation' ? 'in_consultation' : nextStatus === 'no_show' ? null : 'queue_completed';
     if (event) await notifyAppointmentEvent(updated._id, event);
-    return res.status(200).json({ success: true, data: populated });
+    const patientNotification = wasWaiting && nextStatus === 'called' ? await notifyPatientQueueCalled(updated._id) : null;
+    return res.status(200).json({ success: true, data: populated, notification: patientNotification });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ success: false, message: error.message });
     if ([20, 251].includes(error.code) || /transaction|replica set/i.test(error.message || '')) return res.status(503).json({ success: false, message: 'Queue updates require MongoDB transaction support' });

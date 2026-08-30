@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 
+const doctorFields = ['name', 'email', 'phone', 'specialization', 'department', 'qualification', 'experience'];
+const pickDoctorFields = (body = {}) => Object.fromEntries(
+  doctorFields.filter((field) => Object.hasOwn(body, field)).map((field) => [field, body[field]])
+);
+
 const sendInvalidIdResponse = (res) =>
   res.status(400).json({ success: false, message: 'Invalid doctor ID' });
 
@@ -53,7 +58,7 @@ const getDoctorById = async (req, res) => {
 
 const createDoctor = async (req, res) => {
   try {
-    const doctor = await Doctor.create(req.body);
+    const doctor = await Doctor.create(pickDoctorFields(req.body));
     return res.status(201).json({ success: true, data: doctor });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') {
@@ -70,7 +75,7 @@ const updateDoctor = async (req, res) => {
   }
 
   try {
-    const doctor = await Doctor.findByIdAndUpdate(req.params.id, req.body, {
+    const doctor = await Doctor.findByIdAndUpdate(req.params.id, pickDoctorFields(req.body), {
       new: true,
       runValidators: true,
     });

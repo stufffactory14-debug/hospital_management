@@ -8,7 +8,7 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
-function InvoiceTable({ invoices, loading, canEdit, canDelete, onView, onEdit, onDelete, editDisabled }) {
+function InvoiceTable({ invoices, loading, canEdit, canDelete, canPay, onView, onPay, onEdit, onDelete, editDisabled }) {
   if (loading) return <p className="billing-state">Loading invoices…</p>;
   if (!invoices.length) return <p className="billing-state">No invoices match the current search or filters.</p>;
 
@@ -26,7 +26,7 @@ function InvoiceTable({ invoices, loading, canEdit, canDelete, onView, onEdit, o
             <td>{invoice.appointment?.reason || '—'}</td>
             <td className="money-cell">{formatMoney(invoice.total)}</td><td className="money-cell">{formatMoney(invoice.paidAmount)}</td><td className="money-cell">{formatMoney(balance)}</td>
             <td><span className={`invoice-status invoice-status-${status}`}>{status}</span></td><td>{formatDate(invoice.createdAt)}</td>
-            <td><div className="invoice-actions"><button type="button" onClick={() => onView(invoice)}>View</button>{canEdit && <button type="button" disabled={editDisabled} title={editDisabled ? 'Editing will be available in the next billing phase' : undefined} onClick={() => onEdit(invoice)}>Edit</button>}{canDelete && <button className="invoice-delete" type="button" onClick={() => onDelete(invoice)}>Delete</button>}</div></td>
+            <td><div className="invoice-actions"><button type="button" onClick={() => onView(invoice)}>View</button>{canPay && Number(invoice.total) > Number(invoice.paidAmount || 0) && <button type="button" onClick={() => onPay(invoice)}>Pay</button>}{canEdit && <button type="button" disabled={editDisabled} onClick={() => onEdit(invoice)}>Edit</button>}{canDelete && <button className="invoice-delete" type="button" onClick={() => onDelete(invoice)}>Delete</button>}</div></td>
           </tr>;
         })}</tbody>
       </table>

@@ -3,6 +3,11 @@ const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const Prescription = require('../models/Prescription');
 
+const patientFields = ['name', 'email', 'phone', 'dateOfBirth', 'gender', 'bloodGroup', 'address', 'emergencyContact', 'medicalHistory'];
+const pickPatientFields = (body = {}) => Object.fromEntries(
+  patientFields.filter((field) => Object.hasOwn(body, field)).map((field) => [field, body[field]])
+);
+
 const sendInvalidIdResponse = (res) =>
   res.status(400).json({ success: false, message: 'Invalid patient ID' });
 
@@ -77,7 +82,7 @@ const getPatientById = async (req, res) => {
 
 const createPatient = async (req, res) => {
   try {
-    const patient = await Patient.create(req.body);
+    const patient = await Patient.create(pickPatientFields(req.body));
     return res.status(201).json({ success: true, data: serializePatient(patient, req.user.role) });
   } catch (error) {
     if (error.name === 'ValidationError' || error.name === 'CastError') {
@@ -94,7 +99,7 @@ const updatePatient = async (req, res) => {
   }
 
   try {
-    const patient = await Patient.findByIdAndUpdate(req.params.id, req.body, {
+    const patient = await Patient.findByIdAndUpdate(req.params.id, pickPatientFields(req.body), {
       new: true,
       runValidators: true,
     });

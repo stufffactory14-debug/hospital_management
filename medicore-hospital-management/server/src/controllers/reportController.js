@@ -6,7 +6,8 @@ const Patient = require('../models/Patient');
 const Prescription = require('../models/Prescription');
 const Payment = require('../models/Payment');
 
-const APPOINTMENT_STATUSES = ['scheduled', 'completed', 'cancelled'];
+const APPOINTMENT_STATUSES = ['scheduled', 'completed', 'cancelled', 'no_show'];
+const QUEUE_STATUSES = ['waiting', 'called', 'in_consultation', 'completed', 'cancelled', 'no_show'];
 const PAYMENT_STATUSES = ['unpaid', 'partial', 'paid'];
 
 const inputError = (message) => {
@@ -62,7 +63,7 @@ const getDoctorScope = (req, res) => {
 const getOverview = async (req, res) => {
   try {
     const range = getDateRange(req);
-    const [patients, doctors, appointments, prescriptions, invoices] = await Promise.all([
+    const [patients, doctors, appointments, prescriptions, invoices, queue] = await Promise.all([
       Patient.countDocuments(dateMatch('createdAt', range)),
       Doctor.countDocuments(dateMatch('createdAt', range)),
       Appointment.aggregate([{ $match: dateMatch('dateTime', range) }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
@@ -71,6 +72,7 @@ const getOverview = async (req, res) => {
         { $match: dateMatch('createdAt', range) },
         { $group: { _id: null, count: { $sum: 1 }, totalInvoiced: { $sum: '$total' }, totalPaid: { $sum: '$paidAmount' }, totalOutstanding: { $sum: { $max: [{ $subtract: ['$total', '$paidAmount'] }, 0] } } } },
       ]),
+      Appointment.aggregate([{ $match: { queueDate: { $gte: range.effectiveFrom, $lte: range.effectiveTo }, queueStatus: { $in: QUEUE_STATUSES } } }, { $group: { _id: '$queueStatus', count: { $sum: 1 } } }]),
     ]);
     const appointmentCounts = Object.fromEntries(APPOINTMENT_STATUSES.map((status) => [status, appointments.find((item) => item._id === status)?.count || 0]));
     const invoiceTotals = invoices[0] || { count: 0, totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0 };
@@ -81,11 +83,13 @@ const getOverview = async (req, res) => {
       scheduledAppointments: appointmentCounts.scheduled,
       completedAppointments: appointmentCounts.completed,
       cancelledAppointments: appointmentCounts.cancelled,
+      noShowAppointments: appointmentCounts.no_show,
       totalPrescriptions: prescriptions,
       totalInvoices: invoiceTotals.count,
       totalInvoiced: Number(invoiceTotals.totalInvoiced || 0),
       totalPaid: Number(invoiceTotals.totalPaid || 0),
       totalOutstanding: Number(invoiceTotals.totalOutstanding || 0),
+      queueByStatus: Object.fromEntries(QUEUE_STATUSES.map((status) => [status, queue.find((item) => item._id === status)?.count || 0])),
     };
     if (req.user.role === 'receptionist') delete data.totalPrescriptions;
     return res.status(200).json({ success: true, data: rangeResponse(range, data) });
@@ -113,7 +117,7 @@ const getAppointmentsReport = async (req, res) => {
     const [byStatus, byDate, byDoctor] = await Promise.all([
       Appointment.aggregate([{ $match: match }, { $group: { _id: '$status', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
       Appointment.aggregate([{ $match: match }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$dateTime', timezone: 'UTC' } }, count: { $sum: 1 } } }, { $project: { _id: 0, date: '$_id', count: 1 } }, { $sort: { date: 1 } }]),
-      Appointment.aggregate([{ $match: match }, { $group: { _id: '$doctor', count: { $sum: 1 } } }, { $lookup: { from: Doctor.collection.name, localField: '_id', foreignField: '_id', as: 'doctor' } }, { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: true } }, { $project: { _id: 0, doctorId: '$_id', doctorName: { $ifNull: ['$doctor.name', 'Unknown doctor'] }, count: 1 } }, { $sort: { count: -1, doctorName: 1 } }]),
+      Appointment.aggregate([{ $match: match }, { $group: { _id: { doctor: '$doctor', status: '$status' }, count: { $sum: 1 } } }, { $group: { _id: '$_id.doctor', count: { $sum: '$count' }, statuses: { $push: { status: '$_id.status', count: '$count' } } } }, { $lookup: { from: Doctor.collection.name, localField: '_id', foreignField: '_id', as: 'doctor' } }, { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: true } }, { $project: { _id: 0, doctorId: '$_id', doctorName: { $ifNull: ['$doctor.name', 'Unknown doctor'] }, count: 1, completed: { $let: { vars: { row: { $arrayElemAt: [{ $filter: { input: '$statuses', as: 's', cond: { $eq: ['$$s.status', 'completed'] } } }, 0] } }, in: { $ifNull: ['$$row.count', 0] } } }, cancelled: { $let: { vars: { row: { $arrayElemAt: [{ $filter: { input: '$statuses', as: 's', cond: { $eq: ['$$s.status', 'cancelled'] } } }, 0] } }, in: { $ifNull: ['$$row.count', 0] } } }, noShow: { $let: { vars: { row: { $arrayElemAt: [{ $filter: { input: '$statuses', as: 's', cond: { $eq: ['$$s.status', 'no_show'] } } }, 0] } }, in: { $ifNull: ['$$row.count', 0] } } } } }, { $sort: { count: -1, doctorName: 1 } }]),
     ]);
     return res.status(200).json({ success: true, data: rangeResponse(range, { byStatus, byDate, byDoctor }) });
   } catch (error) {

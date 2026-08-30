@@ -4,7 +4,7 @@ const formatDateTime = (value) => {
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
 };
 
-function AppointmentTable({ appointments, loading, canEdit, canDelete, onEdit, onDelete, deletingId }) {
+function AppointmentTable({ appointments, loading, canEdit, canDelete, onEdit, onReschedule, onDelete, deletingId }) {
   if (loading) return <p className="appointments-state">Loading appointment records…</p>;
   if (!appointments.length) return <p className="appointments-state">No appointments match your search or filters.</p>;
 
@@ -20,7 +20,7 @@ function AppointmentTable({ appointments, loading, canEdit, canDelete, onEdit, o
               <td>{formatDateTime(appointment.dateTime)}</td>
               <td>{appointment.reason}</td>
               <td><span className={`appointment-status-pill status-${(appointment.status || 'unavailable').toLowerCase()}`}>{appointment.status || 'Unavailable'}</span></td>
-              {(canEdit || canDelete) && <td className="appointment-actions">{canEdit && <button type="button" onClick={() => onEdit(appointment)}>Edit</button>}{canDelete && <button className="appointment-delete-action" type="button" disabled={deletingId === appointment._id} onClick={() => onDelete(appointment)}>{deletingId === appointment._id ? 'Deleting…' : 'Delete'}</button>}</td>}
+              {(canEdit || canDelete) && <td className="appointment-actions">{canEdit && <button type="button" onClick={() => onEdit(appointment)}>Edit</button>}{canEdit && ['no_show', 'cancelled'].includes(appointment.status) && <button type="button" onClick={() => onReschedule(appointment)}>Reschedule</button>}{canDelete && <button className="appointment-delete-action" type="button" disabled={deletingId === appointment._id} onClick={() => onDelete(appointment)}>{deletingId === appointment._id ? 'Deleting…' : 'Delete'}</button>}</td>}
             </tr>
           ))}
         </tbody>

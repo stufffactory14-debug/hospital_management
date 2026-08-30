@@ -4,6 +4,7 @@ const {
   getAppointments,
   getAppointmentById,
   createAppointment,
+  rescheduleAppointment,
   updateAppointment,
   deleteAppointment,
 } = require('../controllers/appointmentController');
@@ -16,6 +17,10 @@ router
   .route('/')
   .get(authorizeRoles('admin', 'doctor', 'receptionist'), getAppointments)
   .post(authorizeRoles('admin', 'doctor', 'receptionist'), createAppointment);
+
+router
+  .route('/:id/reschedule')
+  .post(authorizeRoles('admin', 'doctor', 'receptionist'), rescheduleAppointment);
 
 router
   .route('/:id')

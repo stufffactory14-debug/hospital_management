@@ -6,6 +6,7 @@ const { notifyAppointmentEvent } = require('../services/notificationService');
 const { dateKey, appointmentDateKey, ensureQueueEntryForAppointment } = require('../services/queueService');
 
 const VALID_STATUSES = ['scheduled', 'completed', 'cancelled', 'no_show'];
+const APPOINTMENT_FIELDS = ['patient', 'doctor', 'dateTime', 'reason', 'status'];
 const ALLOWED_STATUS_TRANSITIONS = {
   scheduled: ['scheduled', 'completed', 'cancelled', 'no_show'],
   completed: ['completed'],
@@ -26,6 +27,12 @@ const parseDateTime = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
+
+const pickAppointmentFields = (body) => Object.fromEntries(
+  APPOINTMENT_FIELDS
+    .filter((field) => Object.hasOwn(body, field))
+    .map((field) => [field, body[field]])
+);
 
 const isDoctorUser = (req) => req.user?.role === 'doctor';
 
@@ -189,7 +196,7 @@ const createAppointment = async (req, res) => {
       return res.status(409).json({ success: false, message: conflict.message });
     }
 
-    const payload = { ...req.body, doctor: requestedDoctorId, dateTime };
+    const payload = { ...pickAppointmentFields(req.body), doctor: requestedDoctorId, dateTime };
     const appointment = await Appointment.create(payload);
     const queueDate = appointmentDateKey(req.body.dateTime) || dateKey(dateTime);
     if (queueDate === dateKey()) {
@@ -203,6 +210,33 @@ const createAppointment = async (req, res) => {
     }
 
     return res.status(500).json({ success: false, message: 'Unable to create appointment' });
+  }
+};
+
+const rescheduleAppointment = async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return sendInvalidIdResponse(res);
+  try {
+    const doctorScope = getDoctorScope(req, res);
+    if (isDoctorUser(req) && doctorScope === undefined) return;
+    const original = await Appointment.findOne({ _id: req.params.id, ...(doctorScope ? { doctor: doctorScope } : {}) });
+    if (!original) return sendNotFoundResponse(res);
+    if (!['no_show', 'cancelled'].includes(original.status)) return res.status(400).json({ success: false, message: 'Only no-show or cancelled appointments can be rescheduled' });
+    const requestedDoctor = req.body.doctor || original.doctor;
+    if (doctorScope && String(requestedDoctor) !== String(doctorScope)) return res.status(403).json({ success: false, message: 'Doctors can only reschedule appointments for their own Doctor profile' });
+    const referenceError = await validateReferences(original.patient, requestedDoctor);
+    if (referenceError) return res.status(referenceError.status || 400).json({ success: false, message: referenceError.message });
+    const dateTime = parseDateTime(req.body.dateTime);
+    if (!dateTime) return res.status(400).json({ success: false, message: 'Appointment date and time must be valid' });
+    const conflict = await findSchedulingConflict({ patientId: original.patient, doctorId: requestedDoctor, dateTime });
+    if (conflict) return res.status(409).json({ success: false, message: conflict.message });
+    const appointment = await Appointment.create({ patient: original.patient, doctor: requestedDoctor, dateTime, reason: String(req.body.reason ?? original.reason).trim(), status: 'scheduled' });
+    const queueDate = appointmentDateKey(dateTime) || dateKey(dateTime);
+    if (queueDate === dateKey()) await ensureQueueEntryForAppointment(appointment._id, queueDate);
+    await notifyAppointmentEvent(appointment._id, 'scheduled');
+    return res.status(201).json({ success: true, data: appointment });
+  } catch (error) {
+    if (error.name === 'ValidationError' || error.name === 'CastError') return sendValidationError(res, error);
+    return res.status(500).json({ success: false, message: 'Unable to reschedule appointment' });
   }
 };
 
@@ -252,7 +286,7 @@ const updateAppointment = async (req, res) => {
       return res.status(409).json({ success: false, message: conflict.message });
     }
 
-    const payload = { ...req.body, doctor: doctorId, dateTime };
+    const payload = { ...pickAppointmentFields(req.body), doctor: doctorId, dateTime };
     if (nextStatus === 'no_show') payload.noShowAt = new Date();
     const appointment = await Appointment.findByIdAndUpdate(req.params.id, payload, {
       new: true,
@@ -304,6 +338,7 @@ module.exports = {
   getAppointments,
   getAppointmentById,
   createAppointment,
+  rescheduleAppointment,
   updateAppointment,
   deleteAppointment,
 };

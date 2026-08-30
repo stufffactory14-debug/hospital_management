@@ -23,6 +23,7 @@ function AppointmentsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [modalAppointment, setModalAppointment] = useState(undefined);
+  const [rescheduleAppointment, setRescheduleAppointment] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
@@ -95,12 +96,17 @@ function AppointmentsPage() {
 
     try {
       const payload = { ...form, reason: form.reason.trim() };
-      const response = modalAppointment
+      const response = rescheduleAppointment
+        ? await api.post(`/appointments/${rescheduleAppointment._id}/reschedule`, payload)
+        : modalAppointment
         ? await api.put(`/appointments/${modalAppointment._id}`, payload)
         : await api.post('/appointments', payload);
       const savedAppointment = response.data?.data;
 
-      if (modalAppointment) {
+      if (rescheduleAppointment) {
+        setData((current) => ({ ...current, appointments: [savedAppointment, ...current.appointments] }));
+        setSuccess('New appointment created; historical record preserved.');
+      } else if (modalAppointment) {
         setData((current) => ({ ...current, appointments: current.appointments.map((appointment) => appointment._id === savedAppointment._id ? savedAppointment : appointment) }));
         setSuccess('Appointment updated successfully.');
       } else {
@@ -108,6 +114,7 @@ function AppointmentsPage() {
         setSuccess('Appointment created successfully.');
       }
       setModalAppointment(undefined);
+      setRescheduleAppointment(null);
     } catch (requestError) {
       setFormError(getErrorMessage(requestError, 'Appointment could not be saved. Please try again.'));
     } finally {
@@ -149,12 +156,13 @@ function AppointmentsPage() {
             <input className="appointment-date-filter" type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setPage(1); }} aria-label="Filter by date" />
             <span className="appointments-count">{loading ? 'Loading…' : `${pagination.total} appointment${pagination.total === 1 ? '' : 's'}`}</span>
           </div>
-          <AppointmentTable appointments={filteredAppointments} loading={loading} canEdit={canEdit} canDelete={canDelete} onEdit={(appointment) => { setFormError(''); setModalAppointment(appointment); }} onDelete={handleDelete} deletingId={deletingId} />
+          <AppointmentTable appointments={filteredAppointments} loading={loading} canEdit={canEdit} canDelete={canDelete} onEdit={(appointment) => { setFormError(''); setModalAppointment(appointment); }} onReschedule={(appointment) => { setFormError(''); setModalAppointment(undefined); setRescheduleAppointment(appointment); }} onDelete={handleDelete} deletingId={deletingId} />
           {!loading && <div className="appointment-pagination"><label>Rows per page<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} aria-label="Appointments per page"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><span>Page {pagination.page} of {pagination.pages}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><button type="button" disabled={page >= pagination.pages} onClick={() => setPage((current) => current + 1)}>Next</button></div></div>}
         </section>
       </div>
 
       {canEdit && modalAppointment !== undefined && <AppointmentModal appointment={modalAppointment} patients={data.patients} doctors={data.doctors} optionsLoading={loading} onClose={closeModal} onSubmit={handleSave} saving={saving} error={formError} />}
+      {canEdit && rescheduleAppointment && <AppointmentModal appointment={{ ...rescheduleAppointment, status: 'scheduled' }} patients={data.patients} doctors={data.doctors} optionsLoading={loading} onClose={() => !saving && setRescheduleAppointment(null)} onSubmit={handleSave} saving={saving} error={formError} reschedule />}
     </DashboardLayout>
   );
 }
